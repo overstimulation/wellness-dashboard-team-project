@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import axios from "axios";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Form,
@@ -48,14 +49,31 @@ export default function RegisterPage() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsLoading(true);
+    setErrorMessage(null);
+
     try {
-      await axios.post("/api/auth/register", values);
+      const res = await axios.post("/api/auth/register", values);
+      console.log("register response:", res);
       router.push("/login");
-    } catch (error) {
+    } catch (error: any) {
+      // Axios error may have a response with a message from the server
       console.error("Registration failed", error);
-      // Here you can add a toast notification to show the error
+      const serverMessage = error?.response?.data?.message;
+      if (serverMessage) {
+        setErrorMessage(`${serverMessage} (status ${error.response.status})`);
+      } else if (error?.message) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage("Registration failed. Check console for details.");
+      }
+    } finally {
+      setIsLoading(false);
     }
   }
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   return (
     <div className="flex items-center justify-center min-h-screen">
@@ -100,15 +118,24 @@ export default function RegisterPage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="********" {...field} />
+                      <Input
+                        type="password"
+                        placeholder="********"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full">
-                Register
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? "Registering..." : "Register"}
               </Button>
+              {errorMessage && (
+                <p className="mt-2 text-sm text-destructive text-center">
+                  {errorMessage}
+                </p>
+              )}
             </form>
           </Form>
           <div className="mt-4 text-center text-sm">

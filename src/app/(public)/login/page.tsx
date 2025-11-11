@@ -1,6 +1,7 @@
 "use client";
 
 import { useForm } from "react-hook-form";
+import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { signIn } from "next-auth/react";
@@ -43,18 +44,41 @@ export default function LoginPage() {
     },
   });
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    const result = await signIn("credentials", {
-      redirect: false,
-      email: values.email,
-      password: values.password,
-    });
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    if (result?.error) {
-      console.error("Login failed", result.error);
-      // Here you can add a toast notification to show the error
-    } else {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const result = await signIn("credentials", {
+        redirect: false,
+        email: values.email,
+        password: values.password,
+      });
+
+      // Debugging help: log the raw result
+      console.log("signIn result:", result);
+
+      // Handle possible outcomes. In some setups result may be undefined,
+      // so treat that as a failure and show a message.
+      if (!result || (result as any).error) {
+        const msg =
+          (result as any)?.error || "Login failed. Check your credentials.";
+        setErrorMessage(msg);
+        console.error("Login failed", msg);
+        return;
+      }
+
       router.push("/dashboard");
+    } catch (err) {
+      console.error("Unexpected login error", err);
+      setErrorMessage(
+        "An unexpected error occurred. Check console for details."
+      );
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -90,15 +114,24 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="********" {...field} />
+                      <Input
+                        type="password"
+                        placeholder="********"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full">
-                Login
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? "Logging in..." : "Login"}
               </Button>
+              {errorMessage && (
+                <p className="mt-2 text-sm text-destructive text-center">
+                  {errorMessage}
+                </p>
+              )}
             </form>
           </Form>
           <div className="mt-4 text-center text-sm">
