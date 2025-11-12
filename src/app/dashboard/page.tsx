@@ -1,11 +1,22 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Select } from "@/components/ui/select";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 
 // Typy dla danych użytkownika
 interface UserData {
@@ -24,11 +35,16 @@ interface HistoryEntry {
   date: string;
   weight: string;
   notes?: string;
+  dateISO?: string;
 }
 
 export default function DashboardPage() {
-  const [tab, setTab] = useState<"dashboard" | "history" | "settings">("dashboard");
-  const [darkMode, setDarkMode] = useState(false);
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  const [tab, setTab] = useState<
+    "dashboard" | "history" | "settings" | "nutrition"
+  >("dashboard");
   const [userData, setUserData] = useState<UserData>({
     weight: "",
     height: "",
@@ -36,28 +52,141 @@ export default function DashboardPage() {
     city: "",
     gender: "",
     goal: "",
-    sportFrequency: ""
+    sportFrequency: "",
   });
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [bmi, setBmi] = useState<number | null>(null);
   const [bmr, setBmr] = useState<number | null>(null);
+  // Nutrition tracking (local only)
+  const [consumedCalories, setConsumedCalories] = useState<number>(0);
+  const [caloriesGoal, setCaloriesGoal] = useState<number | null>(null);
+  const [consumedWater, setConsumedWater] = useState<number>(0); // ml
+  const [waterGoal, setWaterGoal] = useState<number>(2000); // default 2000ml
+  const [calInput, setCalInput] = useState<string>("");
+  const [waterInput, setWaterInput] = useState<string>("");
+  const [prevDate, setPrevDate] = useState<string>(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [prevWeight, setPrevWeight] = useState<string>("");
+  const [allowPreviousData, setAllowPreviousData] = useState<boolean>(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState<string>(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [editWeight, setEditWeight] = useState<string>("");
 
-  // Ładowanie danych z localStorage przy starcie
+  const normalizeHistory = (raw: any[]): HistoryEntry[] => {
+    return raw
+      .map((item) => {
+        // ensure we have a stable id and a dateISO for sorting
+        const entry: HistoryEntry = { ...item } as any;
+        entry.id =
+          item.id ??
+          item._id ??
+          Date.now().toString() + Math.random().toString(36).slice(2, 8);
+        if (!entry.dateISO) {
+          const parsed = Date.parse(entry.date as string);
+          if (!isNaN(parsed)) {
+            entry.dateISO = new Date(parsed).toISOString().slice(0, 10);
+          } else {
+            entry.dateISO = new Date().toISOString().slice(0, 10);
+          }
+        }
+        return entry;
+      })
+      .sort((a, b) => (a.dateISO || "").localeCompare(b.dateISO || ""));
+  };
+
   useEffect(() => {
+    // Redirect unauthenticated users to the login page
+    if (status === "loading") return;
+    if (status === "unauthenticated") {
+      router.push("/login");
+      return;
+    }
+
     const savedData = localStorage.getItem("wellnessUserData");
     const savedHistory = localStorage.getItem("wellnessHistory");
-    const savedDarkMode = localStorage.getItem("wellnessDarkMode");
-    
+
     if (savedData) {
       setUserData(JSON.parse(savedData));
     }
-    if (savedHistory) {
-      setHistory(JSON.parse(savedHistory));
+
+    const userId = session?.user?.id;
+    if (userId) {
+      (async () => {
+        try {
+          const [pRes, hRes] = await Promise.all([
+            fetch(`/api/profile?userId=${userId}`),
+            fetch(`/api/history?userId=${userId}`),
+          ]);
+
+          if (pRes.ok) {
+            const pJson = await pRes.json();
+            if (pJson?.profile) {
+              const prof = pJson.profile;
+              setUserData((prev) => ({
+                ...prev,
+                age: prof.age !== undefined ? String(prof.age) : prev.age,
+                weight:
+                  prof.currentWeight !== undefined
+                    ? String(prof.currentWeight)
+                    : prev.weight,
+                height:
+                  prof.height !== undefined ? String(prof.height) : prev.height,
+                city: prof.city ?? prev.city,
+                gender: prof.biologicalSex ?? prev.gender,
+                sportFrequency: prof.activityLevel ?? prev.sportFrequency,
+                goal: prof.goalType ?? prev.goal,
+              }));
+            }
+          }
+          if (hRes.ok) {
+            const hJson = await hRes.json();
+            if (hJson?.entries) {
+              const mapped = hJson.entries.map((e: any) => ({
+                id: e._id ?? e.id,
+                date: e.date,
+                dateISO: e.dateISO,
+                weight: String(e.weight ?? e.weight),
+                notes: e.notes,
+              }));
+              const normalized = normalizeHistory(mapped);
+              setHistory(normalized);
+              localStorage.setItem(
+                "wellnessHistory",
+                JSON.stringify(normalized)
+              );
+            }
+          }
+        } catch (e) {
+          console.error("Failed to fetch server profile/history", e);
+        }
+      })();
+    } else {
+      if (savedHistory) {
+        try {
+          const parsed = JSON.parse(savedHistory);
+          const normalized = normalizeHistory(parsed);
+          setHistory(normalized);
+          localStorage.setItem("wellnessHistory", JSON.stringify(normalized));
+        } catch (e) {
+          console.error("Failed to parse saved history", e);
+        }
+      }
     }
-    if (savedDarkMode) {
-      setDarkMode(JSON.parse(savedDarkMode));
+
+    // Load today's nutrition logs (per-date keys)
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const cal = localStorage.getItem(`calories_${today}`);
+      const water = localStorage.getItem(`water_${today}`);
+      if (cal) setConsumedCalories(Number(cal));
+      if (water) setConsumedWater(Number(water));
+    } catch (e) {
+      // ignore
     }
-  }, []);
+  }, [status, session?.user?.id]);
 
   // Obliczanie BMI i BMR przy zmianie danych
   useEffect(() => {
@@ -80,7 +209,7 @@ export default function DashboardPage() {
       const weightNum = parseFloat(userData.weight);
       const heightNum = parseFloat(userData.height);
       const ageNum = parseFloat(userData.age);
-      
+
       let bmrValue;
       if (userData.gender === "male") {
         bmrValue = 10 * weightNum + 6.25 * heightNum - 5 * ageNum + 5;
@@ -93,36 +222,157 @@ export default function DashboardPage() {
     }
   };
 
+  useEffect(() => {
+    if (!bmr) return;
+    const freq = userData.sportFrequency;
+    let multiplier = 1.2; // sedentary
+    if (freq === "daily") multiplier = 1.6;
+    else if (freq === "few") multiplier = 1.4;
+    else if (freq === "rare") multiplier = 1.25;
+
+    let goal = Math.round(bmr * multiplier);
+    if (userData.goal === "lose") goal -= 300;
+    if (userData.goal === "gain") goal += 300;
+    setCaloriesGoal(goal);
+  }, [bmr, userData.sportFrequency, userData.goal]);
+
+  useEffect(() => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      localStorage.setItem(`calories_${today}`, String(consumedCalories));
+      localStorage.setItem(`water_${today}`, String(consumedWater));
+    } catch (e) {}
+  }, [consumedCalories, consumedWater]);
+
   const handleSave = () => {
     localStorage.setItem("wellnessUserData", JSON.stringify(userData));
-    
-    // Dodaj aktualną wagę do historii jeśli się zmieniła
+
     if (userData.weight) {
+      const dateISO = new Date().toISOString().slice(0, 10);
+      const displayDate = new Date().toLocaleDateString();
       const newEntry: HistoryEntry = {
         id: Date.now().toString(),
-        date: new Date().toLocaleDateString(),
-        weight: userData.weight
+        date: displayDate,
+        dateISO,
+        weight: userData.weight,
       };
-      
-      const updatedHistory = [newEntry, ...history.slice(0, 9)]; // Keep last 10 entries
-      setHistory(updatedHistory);
-      localStorage.setItem("wellnessHistory", JSON.stringify(updatedHistory));
+
+      const userId = session?.user?.id;
+      if (userId) {
+        // persist to server
+        (async () => {
+          try {
+            const res = await fetch(`/api/history`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userId,
+                dateISO,
+                date: displayDate,
+                weight: userData.weight,
+              }),
+            });
+            if (res.ok) {
+              const json = await res.json();
+              // add server entry (id from server)
+              const entry = {
+                id: json.entry._id,
+                date: json.entry.date,
+                dateISO: json.entry.dateISO,
+                weight: json.entry.weight,
+              } as HistoryEntry;
+              const normalized = normalizeHistory([...(history || []), entry]);
+              setHistory(normalized);
+              localStorage.setItem(
+                "wellnessHistory",
+                JSON.stringify(normalized)
+              );
+            }
+          } catch (e) {
+            console.error("Failed to save history to server", e);
+          }
+        })();
+        (async () => {
+          try {
+            await fetch(`/api/profile`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ userId, userData }),
+            });
+          } catch (e) {
+            console.error("Failed to save profile to server", e);
+          }
+        })();
+      } else {
+        const updatedHistory = normalizeHistory([...(history || []), newEntry]);
+        setHistory(updatedHistory);
+        localStorage.setItem("wellnessHistory", JSON.stringify(updatedHistory));
+      }
     }
-    
+
     alert("Data saved successfully!");
   };
 
-  const handleInputChange = (field: keyof UserData, value: string) => {
-    setUserData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  const addPreviousEntry = async () => {
+    if (!prevDate || !prevWeight) return;
+    const dateISO = new Date(prevDate).toISOString().slice(0, 10);
+    const displayDate = new Date(dateISO).toLocaleDateString();
+    const newEntry: HistoryEntry = {
+      id: Date.now().toString(),
+      date: displayDate,
+      dateISO,
+      weight: prevWeight,
+    };
+
+    const userId = session?.user?.id;
+    if (userId) {
+      try {
+        const res = await fetch(`/api/history`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId,
+            dateISO,
+            date: displayDate,
+            weight: Number(prevWeight),
+          }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const entry = {
+            id: json.entry._id,
+            date: json.entry.date,
+            dateISO: json.entry.dateISO,
+            weight: json.entry.weight,
+          } as HistoryEntry;
+          const merged = allowPreviousData
+            ? [entry, ...(history || [])]
+            : [...(history || []), entry];
+          const normalized = normalizeHistory(merged);
+          setHistory(normalized);
+          localStorage.setItem("wellnessHistory", JSON.stringify(normalized));
+        }
+      } catch (e) {
+        console.error("Failed to persist previous entry", e);
+      }
+    } else {
+      const merged = allowPreviousData
+        ? [newEntry, ...(history || [])]
+        : [...(history || []), newEntry];
+      const updatedHistory = normalizeHistory(merged);
+      setHistory(updatedHistory);
+      localStorage.setItem("wellnessHistory", JSON.stringify(updatedHistory));
+    }
+
+    setPrevWeight("");
+    setPrevDate(new Date().toISOString().slice(0, 10));
   };
 
-  const toggleDarkMode = () => {
-    const newDarkMode = !darkMode;
-    setDarkMode(newDarkMode);
-    localStorage.setItem("wellnessDarkMode", JSON.stringify(newDarkMode));
+  const handleInputChange = (field: keyof UserData, value: string) => {
+    setUserData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
   };
 
   const getBmiCategory = (bmi: number) => {
@@ -132,22 +382,36 @@ export default function DashboardPage() {
     return "Obesity";
   };
 
+  // Custom tooltip to reliably show the hovered point's value
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      // payload[0].value should be the numeric weight, but read from payload[0].payload to be safe
+      const raw = payload[0];
+      const value = raw?.value ?? raw?.payload?.weight;
+      return (
+        <div className="bg-white border border-gray-200 text-gray-900 dark:bg-gray-800 dark:text-white p-2 rounded shadow">
+          <p className="text-xs opacity-75">{label}</p>
+          <p className="font-semibold">{value} kg</p>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
-    <main className={`min-h-screen p-8 transition-colors duration-300 ${
-      darkMode 
-        ? "bg-gray-900 text-white" 
-        : "bg-gray-50 text-gray-900"
-    }`}>
+    <main className="min-h-screen p-8 transition-colors duration-300 bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-white">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-2">Wellness Dashboard</h1>
-          <p className="text-lg opacity-75">Track your health and fitness journey</p>
+          <p className="text-lg opacity-75">
+            Track your health and fitness journey
+          </p>
         </div>
 
         {/* Tabs */}
         <div className="flex space-x-4 mb-8 justify-center">
-          {["dashboard", "history", "settings"].map((t) => (
+          {["dashboard", "history", "nutrition", "settings"].map((t) => (
             <Button
               key={t}
               variant={tab === t ? "default" : "outline"}
@@ -163,7 +427,7 @@ export default function DashboardPage() {
         {tab === "dashboard" && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Quick Stats */}
-            <Card className={darkMode ? "bg-gray-800 border-gray-700" : ""}>
+            <Card className="dark:bg-gray-800 dark:border-gray-700">
               <CardHeader>
                 <CardTitle>Personal Information</CardTitle>
               </CardHeader>
@@ -171,78 +435,85 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="font-semibold">Weight</p>
-                    <p className={darkMode ? "text-gray-300" : "text-gray-600"}>
+                    <p className="text-gray-600 dark:text-gray-300">
                       {userData.weight || "–"} kg
                     </p>
                   </div>
                   <div>
                     <p className="font-semibold">Height</p>
-                    <p className={darkMode ? "text-gray-300" : "text-gray-600"}>
+                    <p className="text-gray-600 dark:text-gray-300">
                       {userData.height || "–"} cm
                     </p>
                   </div>
                   <div>
                     <p className="font-semibold">Age</p>
-                    <p className={darkMode ? "text-gray-300" : "text-gray-600"}>
+                    <p className="text-gray-600 dark:text-gray-300">
                       {userData.age || "–"}
                     </p>
                   </div>
                   <div>
                     <p className="font-semibold">Gender</p>
-                    <p className={darkMode ? "text-gray-300" : "text-gray-600"}>
-                      {userData.gender ? userData.gender.charAt(0).toUpperCase() + userData.gender.slice(1) : "–"}
+                    <p className="text-gray-600 dark:text-gray-300">
+                      {userData.gender
+                        ? userData.gender.charAt(0).toUpperCase() +
+                          userData.gender.slice(1)
+                        : "–"}
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="pt-4 border-t">
                   <p className="font-semibold">Goal</p>
-                  <p className={darkMode ? "text-gray-300" : "text-gray-600"}>
-                    {userData.goal ? 
-                      userData.goal === "gain" ? "Gain Weight" :
-                      userData.goal === "lose" ? "Lose Weight" : "Maintain Weight"
-                      : "–"
-                    }
+                  <p className="text-gray-600 dark:text-gray-300">
+                    {userData.goal
+                      ? userData.goal === "gain"
+                        ? "Gain Weight"
+                        : userData.goal === "lose"
+                        ? "Lose Weight"
+                        : "Maintain Weight"
+                      : "–"}
                   </p>
                 </div>
-                
+
                 <div>
                   <p className="font-semibold">Sport Frequency</p>
-                  <p className={darkMode ? "text-gray-300" : "text-gray-600"}>
-                    {userData.sportFrequency ? 
-                      userData.sportFrequency === "daily" ? "Daily" :
-                      userData.sportFrequency === "few" ? "Few times a week" : "Rarely"
-                      : "–"
-                    }
+                  <p className="text-gray-600 dark:text-gray-300">
+                    {userData.sportFrequency
+                      ? userData.sportFrequency === "daily"
+                        ? "Daily"
+                        : userData.sportFrequency === "few"
+                        ? "Few times a week"
+                        : "Rarely"
+                      : "–"}
                   </p>
                 </div>
               </CardContent>
             </Card>
 
             {/* Health Metrics */}
-            <Card className={darkMode ? "bg-gray-800 border-gray-700" : ""}>
+            <Card className="dark:bg-gray-800 dark:border-gray-700">
               <CardHeader>
                 <CardTitle>Health Metrics</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {bmi && (
-                  <div className="text-center p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                  <div className="text-center p-4 rounded-lg bg-gray-200 text-gray-900 dark:bg-gray-700 dark:text-white">
                     <p className="text-2xl font-bold">{bmi}</p>
                     <p className="text-sm opacity-75">BMI</p>
                     <p className="text-xs mt-1">{getBmiCategory(bmi)}</p>
                   </div>
                 )}
-                
+
                 {bmr && (
-                  <div className="text-center p-4 rounded-lg bg-green-50 dark:bg-green-900/20">
+                  <div className="text-center p-4 rounded-lg bg-gray-200 text-gray-900 dark:bg-gray-700 dark:text-white">
                     <p className="text-2xl font-bold">{bmr} kcal</p>
                     <p className="text-sm opacity-75">Basal Metabolic Rate</p>
                     <p className="text-xs mt-1">Calories burned at rest</p>
                   </div>
                 )}
-                
-                {(!bmi && !bmr) && (
-                  <p className={darkMode ? "text-gray-400" : "text-gray-500"}>
+
+                {!bmi && !bmr && (
+                  <p className="text-gray-500 dark:text-gray-400">
                     Complete your personal data to see health metrics
                   </p>
                 )}
@@ -250,22 +521,57 @@ export default function DashboardPage() {
             </Card>
 
             {/* Recent History */}
-            <Card className={`md:col-span-2 ${darkMode ? "bg-gray-800 border-gray-700" : ""}`}>
+            <Card className="md:col-span-2 dark:bg-gray-800 dark:border-gray-700">
               <CardHeader>
                 <CardTitle>Recent Weight History</CardTitle>
               </CardHeader>
               <CardContent>
                 {history.length > 0 ? (
-                  <div className="space-y-2">
-                    {history.slice(0, 5).map((entry) => (
-                      <div key={entry.id} className="flex justify-between items-center py-2 border-b dark:border-gray-700">
-                        <span>{entry.date}</span>
-                        <span className="font-semibold">{entry.weight} kg</span>
-                      </div>
-                    ))}
+                  <div className="space-y-4">
+                    {/* Chart */}
+                    <div style={{ width: "100%", height: 200 }}>
+                      <ResponsiveContainer>
+                        <LineChart
+                          data={history.map((h) => ({
+                            date: h.date,
+                            weight: Number(h.weight),
+                          }))}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="date" />
+                          <YAxis />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Line
+                            type="monotone"
+                            dataKey="weight"
+                            stroke="#3b82f6"
+                            strokeWidth={2}
+                            dot={{ r: 3 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Recent numbers */}
+                    <div className="grid grid-cols-1 gap-2">
+                      {history
+                        .slice(-5)
+                        .reverse()
+                        .map((entry) => (
+                          <div
+                            key={entry.id}
+                            className="flex justify-between items-center py-2 border-b dark:border-gray-700"
+                          >
+                            <span>{entry.date}</span>
+                            <span className="font-semibold">
+                              {entry.weight} kg
+                            </span>
+                          </div>
+                        ))}
+                    </div>
                   </div>
                 ) : (
-                  <p className={darkMode ? "text-gray-400" : "text-gray-500"}>
+                  <p className="text-gray-500 dark:text-gray-400">
                     No weight history yet. Save your data to start tracking.
                   </p>
                 )}
@@ -274,36 +580,344 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Nutrition Tab */}
+        {tab === "nutrition" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card className="dark:bg-gray-800 dark:border-gray-700">
+              <CardHeader>
+                <CardTitle>Calories</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Recommended today:{" "}
+                  {caloriesGoal ? `${caloriesGoal} kcal` : "–"}
+                </p>
+                <div className="mt-4">
+                  <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                    <div
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          caloriesGoal
+                            ? Math.round(
+                                (consumedCalories / caloriesGoal) * 100
+                              )
+                            : 0
+                        )}%`,
+                      }}
+                      className="h-4 bg-green-500"
+                    />
+                  </div>
+                  <p className="mt-2 text-sm">
+                    {consumedCalories} / {caloriesGoal ?? "–"} kcal (
+                    {caloriesGoal
+                      ? `${Math.round(
+                          (consumedCalories / caloriesGoal) * 100
+                        )}%`
+                      : "–"}
+                    )
+                  </p>
+                </div>
+
+                <div className="mt-4 flex gap-2">
+                  <Input
+                    placeholder="kcal"
+                    value={calInput}
+                    onChange={(e) => setCalInput(e.target.value)}
+                  />
+                  <Button
+                    onClick={() => {
+                      const v = Number(calInput);
+                      if (!isNaN(v) && v > 0) {
+                        setConsumedCalories((c) => c + v);
+                        setCalInput("");
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setConsumedCalories(0)}
+                  >
+                    Reset
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="dark:bg-gray-800 dark:border-gray-700">
+              <CardHeader>
+                <CardTitle>Water Intake</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Daily goal: {waterGoal} ml
+                </p>
+                <div className="mt-4">
+                  <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                    <div
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.round((consumedWater / waterGoal) * 100)
+                        )}%`,
+                      }}
+                      className="h-4 bg-blue-500"
+                    />
+                  </div>
+                  <p className="mt-2 text-sm">
+                    {consumedWater} / {waterGoal} ml (
+                    {Math.round((consumedWater / waterGoal) * 100) || 0}%)
+                  </p>
+                </div>
+
+                <div className="mt-4 flex gap-2">
+                  <Input
+                    placeholder="ml"
+                    value={waterInput}
+                    onChange={(e) => setWaterInput(e.target.value)}
+                  />
+                  <Button
+                    onClick={() => {
+                      const v = Number(waterInput);
+                      if (!isNaN(v) && v > 0) {
+                        setConsumedWater((w) => w + v);
+                        setWaterInput("");
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                  <Button variant="outline" onClick={() => setConsumedWater(0)}>
+                    Reset
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* History Tab */}
         {tab === "history" && (
-          <Card className={darkMode ? "bg-gray-800 border-gray-700" : ""}>
+          <Card className="dark:bg-gray-800 dark:border-gray-700">
             <CardHeader>
               <CardTitle>Weight History</CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+                To add previous-dated entries, enable "Allow adding previous
+                data" in Settings.
+              </div>
               {history.length > 0 ? (
                 <div className="space-y-3">
                   {history.map((entry) => (
-                    <div key={entry.id} className="flex justify-between items-center p-3 rounded-lg border dark:border-gray-700">
-                      <div>
-                        <p className="font-semibold">{entry.date}</p>
-                        {entry.notes && (
-                          <p className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-                            {entry.notes}
-                          </p>
+                    <div
+                      key={entry.id}
+                      className="flex justify-between items-center p-3 rounded-lg border dark:border-gray-700"
+                    >
+                      <div className="flex-1">
+                        {editingId === entry.id ? (
+                          <div className="grid grid-cols-1 gap-2">
+                            <input
+                              type="date"
+                              value={editDate}
+                              onChange={(e) => setEditDate(e.target.value)}
+                              className="border rounded p-2 bg-background"
+                            />
+                            <input
+                              value={editWeight}
+                              onChange={(e) => setEditWeight(e.target.value)}
+                              placeholder="Weight (kg)"
+                              className="border rounded p-2 bg-background"
+                            />
+                          </div>
+                        ) : (
+                          <>
+                            <p className="font-semibold">{entry.date}</p>
+                            {/* notes removed earlier; kept conditional for backward compat */}
+                            {entry.notes && (
+                              <p className="text-sm dark:text-gray-400 text-gray-600">
+                                {entry.notes}
+                              </p>
+                            )}
+                          </>
                         )}
                       </div>
-                      <p className="text-xl font-bold">{entry.weight} kg</p>
+
+                      <div className="ml-4 flex items-center gap-3">
+                        {editingId === entry.id ? (
+                          <>
+                            <Button
+                              onClick={async () => {
+                                // save edited entry
+                                const dateISO = new Date(editDate)
+                                  .toISOString()
+                                  .slice(0, 10);
+                                const displayDate = new Date(
+                                  dateISO
+                                ).toLocaleDateString();
+                                const userId = session?.user?.id;
+                                if (userId) {
+                                  try {
+                                    const res = await fetch(`/api/history`, {
+                                      method: "PUT",
+                                      headers: {
+                                        "Content-Type": "application/json",
+                                      },
+                                      body: JSON.stringify({
+                                        entryId: entry.id,
+                                        dateISO,
+                                        date: displayDate,
+                                        weight: Number(editWeight),
+                                      }),
+                                    });
+                                    if (res.ok) {
+                                      const json = await res.json();
+                                      const updated = {
+                                        id: json.entry._id,
+                                        date: json.entry.date,
+                                        dateISO: json.entry.dateISO,
+                                        weight: json.entry.weight,
+                                      } as HistoryEntry;
+                                      const merged = history.map((h) =>
+                                        h.id === entry.id ? updated : h
+                                      );
+                                      const normalized =
+                                        normalizeHistory(merged);
+                                      setHistory(normalized);
+                                      localStorage.setItem(
+                                        "wellnessHistory",
+                                        JSON.stringify(normalized)
+                                      );
+                                    }
+                                  } catch (e) {
+                                    console.error(
+                                      "Failed to update entry on server",
+                                      e
+                                    );
+                                  }
+                                } else {
+                                  const localUpdated = history.map((h) =>
+                                    h.id === entry.id
+                                      ? {
+                                          ...h,
+                                          date: new Date(
+                                            editDate
+                                          ).toLocaleDateString(),
+                                          dateISO: editDate,
+                                          weight: editWeight,
+                                        }
+                                      : h
+                                  );
+                                  const normalized =
+                                    normalizeHistory(localUpdated);
+                                  setHistory(normalized);
+                                  localStorage.setItem(
+                                    "wellnessHistory",
+                                    JSON.stringify(normalized)
+                                  );
+                                }
+                                setEditingId(null);
+                              }}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={() => setEditingId(null)}
+                            >
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-xl font-bold">
+                              {entry.weight} kg
+                            </p>
+                            <Button
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingId(entry.id);
+                                setEditDate(
+                                  entry.dateISO ||
+                                    new Date().toISOString().slice(0, 10)
+                                );
+                                setEditWeight(String(entry.weight));
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={async () => {
+                                const ok = confirm(
+                                  "Are you sure you want to delete this entry?"
+                                );
+                                if (!ok) return;
+                                const userId = session?.user?.id;
+                                if (userId) {
+                                  try {
+                                    const res = await fetch(`/api/history`, {
+                                      method: "DELETE",
+                                      headers: {
+                                        "Content-Type": "application/json",
+                                      },
+                                      body: JSON.stringify({
+                                        entryId: entry.id,
+                                      }),
+                                    });
+                                    if (res.ok) {
+                                      const filtered = history.filter(
+                                        (h) => h.id !== entry.id
+                                      );
+                                      const normalized =
+                                        normalizeHistory(filtered);
+                                      setHistory(normalized);
+                                      localStorage.setItem(
+                                        "wellnessHistory",
+                                        JSON.stringify(normalized)
+                                      );
+                                    } else {
+                                      console.error(
+                                        "Failed to delete entry",
+                                        res.status
+                                      );
+                                    }
+                                  } catch (e) {
+                                    console.error("Failed to delete entry", e);
+                                  }
+                                } else {
+                                  // local delete
+                                  const filtered = history.filter(
+                                    (h) => h.id !== entry.id
+                                  );
+                                  const normalized = normalizeHistory(filtered);
+                                  setHistory(normalized);
+                                  localStorage.setItem(
+                                    "wellnessHistory",
+                                    JSON.stringify(normalized)
+                                  );
+                                }
+                              }}
+                              className="text-red-500"
+                            >
+                              Delete
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <p className={darkMode ? "text-gray-400" : "text-gray-500"}>
+                  <p className="text-gray-500 dark:text-gray-400">
                     No history entries yet.
                   </p>
-                  <p className={`text-sm mt-2 ${darkMode ? "text-gray-500" : "text-gray-400"}`}>
-                    Your weight entries will appear here after you save your data.
+                  <p className="text-sm mt-2 text-gray-400 dark:text-gray-500">
+                    Your weight entries will appear here after you save your
+                    data.
                   </p>
                 </div>
               )}
@@ -314,7 +928,7 @@ export default function DashboardPage() {
         {/* Settings Tab */}
         {tab === "settings" && (
           <div className="max-w-2xl mx-auto">
-            <Card className={darkMode ? "bg-gray-800 border-gray-700" : ""}>
+            <Card className="dark:bg-gray-800 dark:border-gray-700">
               <CardHeader>
                 <CardTitle>Personal Data</CardTitle>
               </CardHeader>
@@ -326,22 +940,26 @@ export default function DashboardPage() {
                       id="weight"
                       placeholder="e.g., 70"
                       value={userData.weight}
-                      onChange={(e) => handleInputChange("weight", e.target.value)}
+                      onChange={(e) =>
+                        handleInputChange("weight", e.target.value)
+                      }
                       type="number"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="height">Height (cm)</Label>
                     <Input
                       id="height"
                       placeholder="e.g., 175"
                       value={userData.height}
-                      onChange={(e) => handleInputChange("height", e.target.value)}
+                      onChange={(e) =>
+                        handleInputChange("height", e.target.value)
+                      }
                       type="number"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="age">Age</Label>
                     <Input
@@ -352,80 +970,121 @@ export default function DashboardPage() {
                       type="number"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="city">City</Label>
                     <Input
                       id="city"
                       placeholder="e.g., Warsaw"
                       value={userData.city}
-                      onChange={(e) => handleInputChange("city", e.target.value)}
+                      onChange={(e) =>
+                        handleInputChange("city", e.target.value)
+                      }
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="gender">Gender</Label>
-                  <select
+                  <Select
                     id="gender"
                     value={userData.gender}
-                    onChange={(e) => handleInputChange("gender", e.target.value)}
-                    className="w-full border rounded p-2 bg-background"
+                    onChange={(e) =>
+                      handleInputChange("gender", e.target.value)
+                    }
+                    style={{
+                      colorScheme: document.documentElement.classList.contains(
+                        "dark"
+                      )
+                        ? "dark"
+                        : "light",
+                    }}
                   >
                     <option value="">Select gender</option>
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                     <option value="other">Other</option>
-                  </select>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="goal">Goal</Label>
-                  <select
+                  <Select
                     id="goal"
                     value={userData.goal}
                     onChange={(e) => handleInputChange("goal", e.target.value)}
-                    className="w-full border rounded p-2 bg-background"
+                    style={{
+                      colorScheme: document.documentElement.classList.contains(
+                        "dark"
+                      )
+                        ? "dark"
+                        : "light",
+                    }}
                   >
                     <option value="">Select your goal</option>
                     <option value="gain">Gain weight</option>
                     <option value="lose">Lose weight</option>
                     <option value="maintain">Maintain weight</option>
-                  </select>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="sportFrequency">Sport Frequency</Label>
-                  <select
+                  <Select
                     id="sportFrequency"
                     value={userData.sportFrequency}
-                    onChange={(e) => handleInputChange("sportFrequency", e.target.value)}
-                    className="w-full border rounded p-2 bg-background"
+                    onChange={(e) =>
+                      handleInputChange("sportFrequency", e.target.value)
+                    }
+                    style={{
+                      colorScheme: document.documentElement.classList.contains(
+                        "dark"
+                      )
+                        ? "dark"
+                        : "light",
+                    }}
                   >
                     <option value="">Select frequency</option>
                     <option value="daily">Daily</option>
                     <option value="few">Few times a week</option>
                     <option value="rare">Rarely</option>
-                  </select>
+                  </Select>
                 </div>
-
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div>
-                    <Label htmlFor="dark-mode" className="text-base">Dark Mode</Label>
-                    <p className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-                      Toggle dark theme
-                    </p>
-                  </div>
-                  <Switch
-                    id="dark-mode"
-                    checked={darkMode}
-                    onCheckedChange={toggleDarkMode}
-                  />
-                </div>
-
                 <Button className="w-full" onClick={handleSave} size="lg">
                   Save All Data
                 </Button>
+
+                {/* Previous-data setting */}
+                <div className="mt-6 p-4 border rounded bg-transparent dark:bg-input/30 border-input">
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={allowPreviousData}
+                      onChange={(e) => setAllowPreviousData(e.target.checked)}
+                    />
+                    <span className="text-sm">Allow adding previous data</span>
+                  </label>
+
+                  {allowPreviousData && (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <input
+                        type="date"
+                        className="h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base dark:bg-input/30"
+                        value={prevDate}
+                        onChange={(e) => setPrevDate(e.target.value)}
+                      />
+                      <input
+                        placeholder="Weight (kg)"
+                        className="h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base dark:bg-input/30"
+                        value={prevWeight}
+                        onChange={(e) => setPrevWeight(e.target.value)}
+                      />
+                      <div className="flex gap-2">
+                        <Button onClick={addPreviousEntry}>Add previous</Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>
