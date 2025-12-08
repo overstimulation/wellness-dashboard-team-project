@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -79,6 +79,10 @@ export default function DashboardPage() {
   const [showWaterModal, setShowWaterModal] = useState<boolean>(false);
   const [caloriesGoalReached, setCaloriesGoalReached] = useState<boolean>(false);
   const [waterGoalReached, setWaterGoalReached] = useState<boolean>(false);
+  const [toast, setToast] = useState<
+    { message: string; type: "success" | "info" | "error" } | null
+  >(null);
+  const toastTimer = useRef<number | null>(null);
 
   const normalizeHistory = (raw: any[]): HistoryEntry[] => {
     return raw
@@ -100,6 +104,21 @@ export default function DashboardPage() {
         return entry;
       })
       .sort((a, b) => (a.dateISO || "").localeCompare(b.dateISO || ""));
+  };
+
+  const showToast = (
+    message: string,
+    type: "success" | "info" | "error" = "info",
+    duration = 3000
+  ) => {
+    setToast({ message, type });
+    if (toastTimer.current) {
+      window.clearTimeout(toastTimer.current);
+    }
+    toastTimer.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimer.current = null;
+    }, duration);
   };
 
   useEffect(() => {
@@ -193,6 +212,14 @@ export default function DashboardPage() {
     }
   }, [status, session?.user?.id]);
 
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) {
+        window.clearTimeout(toastTimer.current);
+      }
+    };
+  }, []);
+
   // Obliczanie BMI i BMR przy zmianie danych
   useEffect(() => {
     calculateHealthMetrics();
@@ -253,14 +280,14 @@ export default function DashboardPage() {
   useEffect(() => {
     if (caloriesGoal && consumedCalories >= caloriesGoal && !caloriesGoalReached) {
       setCaloriesGoalReached(true);
-      alert("🎉 Gratulacje! Osiągnąłeś dzisiejszą normę kalorii!");
+      showToast("🎉 Gratulacje! Osiągnąłeś dzisiejszą normę kalorii!", "success");
     }
   }, [consumedCalories, caloriesGoal, caloriesGoalReached]);
 
   useEffect(() => {
     if (consumedWater >= waterGoal && !waterGoalReached) {
       setWaterGoalReached(true);
-      alert("💧 Świetnie! Osiągnąłeś dzisiejszą normę wody!");
+      showToast("💧 Świetnie! Osiągnąłeś dzisiejszą normę wody!", "success");
     }
   }, [consumedWater, waterGoal, waterGoalReached]);
 
@@ -341,7 +368,7 @@ export default function DashboardPage() {
       }
     }
 
-    alert("Data saved successfully!");
+    showToast("Data saved successfully!", "success");
   };
 
   const addPreviousEntry = async () => {
@@ -478,6 +505,21 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen p-8 transition-colors duration-300 bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-white">
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-3">
+          <div
+            className={`px-4 py-3 rounded-lg shadow-lg border text-sm font-medium transition-all duration-200
+              ${toast.type === "success"
+                ? "bg-emerald-600 text-white border-emerald-500"
+                : toast.type === "error"
+                ? "bg-red-600 text-white border-red-500"
+                : "bg-slate-800 text-white border-slate-700"}
+            `}
+          >
+            {toast.message}
+          </div>
+        </div>
+      )}
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
