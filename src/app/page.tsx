@@ -20,7 +20,7 @@ export default function Home() {
   };
 
   return (
-    <main className="relative min-h-screen flex items-center justify-center bg-neutral-50 font-sans overflow-hidden">
+    <main className="relative min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-gray-900 font-sans overflow-hidden transition-colors duration-300">
       <AnimatePresence>
         {showIntro && (
           <motion.div
@@ -28,7 +28,7 @@ export default function Home() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "-100%", opacity: 0 }}
             transition={{ duration: 0.6, ease: "easeInOut" }}
-            className="absolute inset-0 flex items-center justify-center bg-white z-50"
+            className="absolute inset-0 flex items-center justify-center bg-white dark:bg-gray-900 z-50"
           >
             <motion.img
               src="/welcome.gif"
@@ -45,14 +45,14 @@ export default function Home() {
       </AnimatePresence>
 
       <div className="text-center">
-        <h1 className="text-4xl font-bold text-blue-600 mb-4">
+        <h1 className="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-4">
           Wellness Dashboard
         </h1>
-        <p className="text-gray-600 mb-8">Zadbaj o swoje samopoczucie 🌿</p>
+        <p className="text-gray-600 dark:text-gray-300 mb-8">Zadbaj o swoje samopoczucie 🌿</p>
 
         <Link
           href="/login"
-          className="bg-blue-600 text-white px-6 py-2 rounded-full hover:bg-blue-700 transition"
+          className="bg-blue-600 dark:bg-blue-500 text-white px-6 py-2 rounded-full hover:bg-blue-700 dark:hover:bg-blue-600 transition"
         >
           Zaloguj się
         </Link>
