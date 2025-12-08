@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Sandwich, GlassWater, X } from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -74,6 +75,10 @@ export default function DashboardPage() {
     new Date().toISOString().slice(0, 10)
   );
   const [editWeight, setEditWeight] = useState<string>("");
+  const [showCaloriesModal, setShowCaloriesModal] = useState<boolean>(false);
+  const [showWaterModal, setShowWaterModal] = useState<boolean>(false);
+  const [caloriesGoalReached, setCaloriesGoalReached] = useState<boolean>(false);
+  const [waterGoalReached, setWaterGoalReached] = useState<boolean>(false);
 
   const normalizeHistory = (raw: any[]): HistoryEntry[] => {
     return raw
@@ -244,6 +249,32 @@ export default function DashboardPage() {
     } catch (e) {}
   }, [consumedCalories, consumedWater]);
 
+  // Check if goals are reached and show popup
+  useEffect(() => {
+    if (caloriesGoal && consumedCalories >= caloriesGoal && !caloriesGoalReached) {
+      setCaloriesGoalReached(true);
+      alert("🎉 Gratulacje! Osiągnąłeś dzisiejszą normę kalorii!");
+    }
+  }, [consumedCalories, caloriesGoal, caloriesGoalReached]);
+
+  useEffect(() => {
+    if (consumedWater >= waterGoal && !waterGoalReached) {
+      setWaterGoalReached(true);
+      alert("💧 Świetnie! Osiągnąłeś dzisiejszą normę wody!");
+    }
+  }, [consumedWater, waterGoal, waterGoalReached]);
+
+  // Reset goal reached flags on new day
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const lastDate = localStorage.getItem('lastGoalCheckDate');
+    if (lastDate !== today) {
+      setCaloriesGoalReached(false);
+      setWaterGoalReached(false);
+      localStorage.setItem('lastGoalCheckDate', today);
+    }
+  }, []);
+
   const handleSave = () => {
     localStorage.setItem("wellnessUserData", JSON.stringify(userData));
 
@@ -382,6 +413,26 @@ export default function DashboardPage() {
     return "Obesity";
   };
 
+  // Function to calculate gradient color based on percentage (0-100%)
+  // Red (0%) -> Yellow/Orange (50%) -> Green (100%)
+  const getProgressGradient = (percentage: number) => {
+    const clampedPercentage = Math.min(100, Math.max(0, percentage));
+    
+    if (clampedPercentage <= 50) {
+      // Red to Yellow (0% to 50%)
+      const ratio = clampedPercentage / 50;
+      const red = 255;
+      const green = Math.round(255 * ratio);
+      return `rgb(${red}, ${green}, 0)`;
+    } else {
+      // Yellow to Green (50% to 100%)
+      const ratio = (clampedPercentage - 50) / 50;
+      const red = Math.round(255 * (1 - ratio));
+      const green = 255;
+      return `rgb(${red}, ${green}, 0)`;
+    }
+  };
+
   // Custom tooltip to reliably show the hovered point's value
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -397,6 +448,33 @@ export default function DashboardPage() {
     }
     return null;
   };
+
+  // Quick add options for calories
+  const caloriesOptions = [
+    { name: "Light snack", calories: 100, icon: "/icons/food/light-snack.png" },
+    { name: "Fruit", calories: 80, icon: "/icons/food/fruit.png" },
+    { name: "Sandwich", calories: 300, icon: "/icons/food/sandwich.png" },
+    { name: "Salad", calories: 200, icon: "/icons/food/salad.png" },
+    { name: "Pasta dish", calories: 450, icon: "/icons/food/pasta.png" },
+    { name: "Pizza slice", calories: 285, icon: "/icons/food/pizza.png" },
+    { name: "Burger", calories: 540, icon: "/icons/food/burger.png" },
+    { name: "Rice with chicken", calories: 500, icon: "/icons/food/rice-chicken.png" },
+    { name: "Full breakfast", calories: 400, icon: "/icons/food/breakfast.png" },
+    { name: "Protein shake", calories: 150, icon: "/icons/food/protein-shake.png" },
+    { name: "Energy bar", calories: 200, icon: "/icons/food/energy-bar.png" },
+    { name: "Ice cream", calories: 250, icon: "/icons/food/ice-cream.png" },
+  ];
+
+  // Quick add options for water
+  const waterOptions = [
+    { name: "Glass of water", ml: 250, icon: "/icons/drinks/cup.png" },
+    { name: "Small bottle", ml: 500, icon: "/icons/drinks/bottle.png" },
+    { name: "Large bottle", ml: 1500, icon: "/icons/drinks/water.png" },
+    { name: "Cup of tea/coffee", ml: 250, icon: "/icons/drinks/coffee.png" },
+    { name: "Mug of coffee/tea", ml: 300, icon: "/icons/drinks/coffee-shop.png" },
+    { name: "Isotonic drink", ml: 500, icon: "/icons/drinks/isotonic.png" },
+    { name: "Can of soda", ml: 330, icon: "/icons/drinks/soda-can.png" },
+  ];
 
   return (
     <main className="min-h-screen p-8 transition-colors duration-300 bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-white">
@@ -604,8 +682,14 @@ export default function DashboardPage() {
                               )
                             : 0
                         )}%`,
+                        background: getProgressGradient(
+                          caloriesGoal
+                            ? (consumedCalories / caloriesGoal) * 100
+                            : 0
+                        ),
+                        transition: 'all 0.3s ease',
                       }}
-                      className="h-4 bg-green-500"
+                      className="h-4"
                     />
                   </div>
                   <p className="mt-2 text-sm">
@@ -638,6 +722,13 @@ export default function DashboardPage() {
                   </Button>
                   <Button
                     variant="outline"
+                    onClick={() => setShowCaloriesModal(true)}
+                    className="px-3"
+                  >
+                    <Sandwich className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
                     onClick={() => setConsumedCalories(0)}
                   >
                     Reset
@@ -662,8 +753,12 @@ export default function DashboardPage() {
                           100,
                           Math.round((consumedWater / waterGoal) * 100)
                         )}%`,
+                        background: getProgressGradient(
+                          (consumedWater / waterGoal) * 100
+                        ),
+                        transition: 'all 0.3s ease',
                       }}
-                      className="h-4 bg-blue-500"
+                      className="h-4"
                     />
                   </div>
                   <p className="mt-2 text-sm">
@@ -688,6 +783,13 @@ export default function DashboardPage() {
                     }}
                   >
                     Add
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowWaterModal(true)}
+                    className="px-3"
+                  >
+                    <GlassWater className="h-4 w-4" />
                   </Button>
                   <Button variant="outline" onClick={() => setConsumedWater(0)}>
                     Reset
@@ -1090,6 +1192,104 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Calories Modal */}
+      {showCaloriesModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white dark:bg-gray-800 p-6 border-b dark:border-gray-700 flex justify-between items-center">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <Sandwich className="h-6 w-6" />
+                Quick Add Calories
+              </h2>
+              <button
+                onClick={() => setShowCaloriesModal(false)}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {caloriesOptions.map((option, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    setConsumedCalories((c) => c + option.calories);
+                    setShowCaloriesModal(false);
+                  }}
+                  className="p-4 border dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left flex items-center gap-3"
+                >
+                  <div className="w-14 h-14 flex-shrink-0 border-2 border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center overflow-hidden p-1">
+                    <img
+                      src={option.icon}
+                      alt={option.name}
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-semibold">{option.name}</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      +{option.calories} kcal
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Water Modal */}
+      {showWaterModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white dark:bg-gray-800 p-6 border-b dark:border-gray-700 flex justify-between items-center">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <GlassWater className="h-6 w-6" />
+                Quick Add Water
+              </h2>
+              <button
+                onClick={() => setShowWaterModal(false)}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {waterOptions.map((option, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    setConsumedWater((w) => w + option.ml);
+                    setShowWaterModal(false);
+                  }}
+                  className="p-4 border dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left flex items-center gap-3"
+                >
+                  <div className="w-14 h-14 flex-shrink-0 border-2 border-gray-200 dark:border-gray-600 rounded-lg flex items-center justify-center overflow-hidden p-1">
+                    <img
+                      src={option.icon}
+                      alt={option.name}
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-semibold">{option.name}</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      +{option.ml} ml
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
