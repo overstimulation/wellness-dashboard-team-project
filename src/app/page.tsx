@@ -48,13 +48,13 @@ export default function Home() {
         <h1 className="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-4">
           Wellness Dashboard
         </h1>
-        <p className="text-gray-600 dark:text-gray-300 mb-8">Zadbaj o swoje samopoczucie 🌿</p>
+        <p className="text-gray-600 dark:text-gray-300 mb-8">Take care of your well-being 🌿</p>
 
         <Link
           href="/login"
           className="bg-blue-600 dark:bg-blue-500 text-white px-6 py-2 rounded-full hover:bg-blue-700 dark:hover:bg-blue-600 transition"
         >
-          Zaloguj się
+          Log in
         </Link>
       </div>
     </main>
