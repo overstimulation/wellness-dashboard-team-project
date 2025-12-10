@@ -280,14 +280,14 @@ export default function DashboardPage() {
   useEffect(() => {
     if (caloriesGoal && consumedCalories >= caloriesGoal && !caloriesGoalReached) {
       setCaloriesGoalReached(true);
-      showToast("🎉 Gratulacje! Osiągnąłeś dzisiejszą normę kalorii!", "success");
+      showToast("🎉 Congratulations! You have reached today's calorie goal!", "success");
     }
   }, [consumedCalories, caloriesGoal, caloriesGoalReached]);
 
   useEffect(() => {
     if (consumedWater >= waterGoal && !waterGoalReached) {
       setWaterGoalReached(true);
-      showToast("💧 Świetnie! Osiągnąłeś dzisiejszą normę wody!", "success");
+      showToast("💧 Great! You have reached today's water intake goal!", "success");
     }
   }, [consumedWater, waterGoal, waterGoalReached]);
 
@@ -478,29 +478,30 @@ export default function DashboardPage() {
 
   // Quick add options for calories
   const caloriesOptions = [
-    { name: "Light snack", calories: 100, icon: "/icons/food/light-snack.png" },
+    { name: "Light snack", calories: 120, icon: "/icons/food/snack.png" },
     { name: "Fruit", calories: 80, icon: "/icons/food/fruit.png" },
-    { name: "Sandwich", calories: 300, icon: "/icons/food/sandwich.png" },
-    { name: "Salad", calories: 200, icon: "/icons/food/salad.png" },
-    { name: "Pasta dish", calories: 450, icon: "/icons/food/pasta.png" },
-    { name: "Pizza slice", calories: 285, icon: "/icons/food/pizza.png" },
-    { name: "Burger", calories: 540, icon: "/icons/food/burger.png" },
-    { name: "Rice with chicken", calories: 500, icon: "/icons/food/rice-chicken.png" },
-    { name: "Full breakfast", calories: 400, icon: "/icons/food/breakfast.png" },
-    { name: "Protein shake", calories: 150, icon: "/icons/food/protein-shake.png" },
-    { name: "Energy bar", calories: 200, icon: "/icons/food/energy-bar.png" },
-    { name: "Ice cream", calories: 250, icon: "/icons/food/ice-cream.png" },
+    { name: "Sandwich", calories: 350, icon: "/icons/food/sandwich.png" },
+    { name: "Salad", calories: 280, icon: "/icons/food/salad.png" },
+    { name: "Pasta dish", calories: 600, icon: "/icons/food/pasta.png" },
+    { name: "Pizza slice", calories: 300, icon: "/icons/food/pizza-slice.png" },
+    { name: "Burger", calories: 700, icon: "/icons/food/burger.png" },
+    { name: "KFC", calories: 1500, icon: "/icons/food/KFC.png" },
+    { name: "Full breakfast", calories: 550, icon: "/icons/food/breakfast.png" },
+    { name: "Protein shake", calories: 200, icon: "/icons/food/protein-shake.png" },
+    { name: "Energy bar", calories: 180, icon: "/icons/food/energy-bar.png" },
+    { name: "Ice cream", calories: 230, icon: "/icons/food/ice-cream.png" },
   ];
 
   // Quick add options for water
   const waterOptions = [
-    { name: "Glass of water", ml: 250, icon: "/icons/drinks/cup.png" },
-    { name: "Small bottle", ml: 500, icon: "/icons/drinks/bottle.png" },
-    { name: "Large bottle", ml: 1500, icon: "/icons/drinks/water.png" },
+    { name: "Glass of water", ml: 250, icon: "/icons/drinks/glass-of-water.png" },
     { name: "Cup of tea/coffee", ml: 250, icon: "/icons/drinks/coffee.png" },
-    { name: "Mug of coffee/tea", ml: 300, icon: "/icons/drinks/coffee-shop.png" },
-    { name: "Isotonic drink", ml: 500, icon: "/icons/drinks/isotonic.png" },
+    { name: "Small bottle", ml: 500, icon: "/icons/drinks/water-bottle.png" },
+     { name: "Mug of coffee/tea", ml: 300, icon: "/icons/drinks/mug-of-coffee.png" },
+    { name: "Large bottle", ml: 1500, icon: "/icons/drinks/big-water.png" },
     { name: "Can of soda", ml: 330, icon: "/icons/drinks/soda-can.png" },
+    { name: "Isotonic drink", ml: 500, icon: "/icons/drinks/energy-drink-bottle.png" },
+    { name: "Energy drink", ml: 330, icon: "/icons/drinks/energy-drink.png" },
   ];
 
   return (
