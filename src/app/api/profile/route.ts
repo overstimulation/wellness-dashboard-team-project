@@ -23,7 +23,7 @@ export async function GET(req: Request) {
     return NextResponse.json(
       {
         profile: user.profile || null,
-        user: { id: user._id, email: user.email, name: user.name },
+        user: { id: user._id, email: user.email, name: user.name, streak: user.streak },
       },
       { status: 200 }
     );

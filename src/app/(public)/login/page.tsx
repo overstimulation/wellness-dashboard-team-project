@@ -64,11 +64,18 @@ export default function LoginPage() {
 
       // Handle possible outcomes. In some setups result may be undefined,
       // so treat that as a failure and show a message.
-      if (!result || (result as any).error) {
-        const msg =
-          (result as any)?.error || "Login failed. Check your credentials.";
+      if (!result || result.error) {
+        let msg = "Invalid email or password.";
+        // Handle specific error codes if needed, or just default to generic for security
+        if (result?.error === "CredentialsSignin" || result?.error === "CredentialsSignal") {
+          msg = "Invalid email or password.";
+        } else {
+          // Fallback for other errors
+          msg = result?.error || "Login failed.";
+        }
+
         setErrorMessage(msg);
-        console.error("Login failed", msg);
+        console.error("Login failed (code):", result?.error);
         return;
       }
 

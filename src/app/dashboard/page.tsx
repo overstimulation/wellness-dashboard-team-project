@@ -1,14 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Sandwich, GlassWater, X } from "lucide-react";
+import { Sandwich, GlassWater, X, Flame } from "lucide-react";
+import OnlineIndicator from "@/components/OnlineIndicator";
 import {
   ResponsiveContainer,
   LineChart,
@@ -35,6 +36,8 @@ interface HistoryEntry {
   id: string;
   date: string;
   weight: string;
+  calories?: number;
+  water?: number;
   notes?: string;
   dateISO?: string;
 }
@@ -79,6 +82,7 @@ export default function DashboardPage() {
   const [showWaterModal, setShowWaterModal] = useState<boolean>(false);
   const [caloriesGoalReached, setCaloriesGoalReached] = useState<boolean>(false);
   const [waterGoalReached, setWaterGoalReached] = useState<boolean>(false);
+  const [userStreak, setUserStreak] = useState<number>(0);
   const [toast, setToast] = useState<
     { message: string; type: "success" | "info" | "error" } | null
   >(null);
@@ -147,6 +151,9 @@ export default function DashboardPage() {
 
           if (pRes.ok) {
             const pJson = await pRes.json();
+            if (pJson?.user?.streak) {
+              setUserStreak(pJson.user.streak);
+            }
             if (pJson?.profile) {
               const prof = pJson.profile;
               setUserData((prev) => ({
@@ -171,8 +178,10 @@ export default function DashboardPage() {
               const mapped = hJson.entries.map((e: any) => ({
                 id: e._id ?? e.id,
                 date: e.date,
-                dateISO: e.dateISO,
+                dateISO: e.dateISO ?? e.date, // Fallback if format is YYYY-MM-DD
                 weight: String(e.weight ?? e.weight),
+                calories: e.calories,
+                water: e.water,
                 notes: e.notes,
               }));
               const normalized = normalizeHistory(mapped);
@@ -211,6 +220,20 @@ export default function DashboardPage() {
       // ignore
     }
   }, [status, session?.user?.id]);
+
+  // Custom hook to sync streak from profile when saving
+  const refreshStreak = async () => {
+    if (!session?.user?.id) return;
+    try {
+      const res = await fetch(`/api/profile?userId=${session.user.id}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.user?.streak !== undefined) {
+          setUserStreak(json.user.streak);
+        }
+      }
+    } catch (e) { console.error(e) }
+  }
 
   useEffect(() => {
     return () => {
@@ -273,7 +296,7 @@ export default function DashboardPage() {
       const today = new Date().toISOString().slice(0, 10);
       localStorage.setItem(`calories_${today}`, String(consumedCalories));
       localStorage.setItem(`water_${today}`, String(consumedWater));
-    } catch (e) {}
+    } catch (e) { }
   }, [consumedCalories, consumedWater]);
 
   // Check if goals are reached and show popup
@@ -305,14 +328,17 @@ export default function DashboardPage() {
   const handleSave = () => {
     localStorage.setItem("wellnessUserData", JSON.stringify(userData));
 
+    const dateISO = new Date().toISOString().slice(0, 10);
+    const displayDate = new Date().toLocaleDateString();
+
     if (userData.weight) {
-      const dateISO = new Date().toISOString().slice(0, 10);
-      const displayDate = new Date().toLocaleDateString();
       const newEntry: HistoryEntry = {
         id: Date.now().toString(),
         date: displayDate,
         dateISO,
         weight: userData.weight,
+        calories: consumedCalories,
+        water: consumedWater
       };
 
       const userId = session?.user?.id;
@@ -326,8 +352,12 @@ export default function DashboardPage() {
               body: JSON.stringify({
                 userId,
                 dateISO,
-                date: displayDate,
+                date: dateISO, // Use ISO for consistency in DB
                 weight: userData.weight,
+                calories: consumedCalories,
+                water: consumedWater,
+                caloriesGoal: caloriesGoal,
+                waterGoal: waterGoal
               }),
             });
             if (res.ok) {
@@ -336,15 +366,29 @@ export default function DashboardPage() {
               const entry = {
                 id: json.entry._id,
                 date: json.entry.date,
-                dateISO: json.entry.dateISO,
+                dateISO: json.entry.date,
                 weight: json.entry.weight,
+                calories: json.entry.calories,
+                water: json.entry.water
               } as HistoryEntry;
-              const normalized = normalizeHistory([...(history || []), entry]);
+
+              // Handle upsert in local history
+              const existingIndex = history.findIndex(h => h.dateISO === entry.dateISO);
+              let newHistory = [...history];
+              if (existingIndex >= 0) {
+                newHistory[existingIndex] = entry;
+              } else {
+                newHistory.push(entry);
+              }
+              const normalized = normalizeHistory(newHistory);
               setHistory(normalized);
               localStorage.setItem(
                 "wellnessHistory",
                 JSON.stringify(normalized)
               );
+
+              // After save, refresh streak
+              await refreshStreak();
             }
           } catch (e) {
             console.error("Failed to save history to server", e);
@@ -362,7 +406,14 @@ export default function DashboardPage() {
           }
         })();
       } else {
-        const updatedHistory = normalizeHistory([...(history || []), newEntry]);
+        const existingIndex = history.findIndex(h => h.dateISO === dateISO);
+        let newHistory = [...history];
+        if (existingIndex >= 0) {
+          newHistory[existingIndex] = newEntry;
+        } else {
+          newHistory.push(newEntry);
+        }
+        const updatedHistory = normalizeHistory(newHistory);
         setHistory(updatedHistory);
         localStorage.setItem("wellnessHistory", JSON.stringify(updatedHistory));
       }
@@ -375,6 +426,9 @@ export default function DashboardPage() {
     if (!prevDate || !prevWeight) return;
     const dateISO = new Date(prevDate).toISOString().slice(0, 10);
     const displayDate = new Date(dateISO).toLocaleDateString();
+
+    // Previous entry typically just weight, but could include arbitrary calories/water if we had inputs for it.
+    // For now assuming just weight history backfill.
     const newEntry: HistoryEntry = {
       id: Date.now().toString(),
       date: displayDate,
@@ -391,7 +445,7 @@ export default function DashboardPage() {
           body: JSON.stringify({
             userId,
             dateISO,
-            date: displayDate,
+            date: dateISO,
             weight: Number(prevWeight),
           }),
         });
@@ -400,12 +454,20 @@ export default function DashboardPage() {
           const entry = {
             id: json.entry._id,
             date: json.entry.date,
-            dateISO: json.entry.dateISO,
+            dateISO: json.entry.date,
             weight: json.entry.weight,
           } as HistoryEntry;
-          const merged = allowPreviousData
-            ? [entry, ...(history || [])]
-            : [...(history || []), entry];
+
+          // Handle upsert locally
+          const existingIndex = history.findIndex(h => h.dateISO === entry.dateISO);
+          let merged = [...history];
+          if (existingIndex >= 0) {
+            if (allowPreviousData) merged[existingIndex] = entry; // override?
+            else { /* keep old? user didn't specify */ merged[existingIndex] = entry; }
+          } else {
+            merged.push(entry);
+          }
+
           const normalized = normalizeHistory(merged);
           setHistory(normalized);
           localStorage.setItem("wellnessHistory", JSON.stringify(normalized));
@@ -414,9 +476,14 @@ export default function DashboardPage() {
         console.error("Failed to persist previous entry", e);
       }
     } else {
-      const merged = allowPreviousData
-        ? [newEntry, ...(history || [])]
-        : [...(history || []), newEntry];
+      // Local only fallback
+      const existingIndex = history.findIndex(h => h.dateISO === dateISO);
+      let merged = [...history];
+      if (existingIndex >= 0) {
+        merged[existingIndex] = newEntry;
+      } else {
+        merged.push(newEntry);
+      }
       const updatedHistory = normalizeHistory(merged);
       setHistory(updatedHistory);
       localStorage.setItem("wellnessHistory", JSON.stringify(updatedHistory));
@@ -425,6 +492,27 @@ export default function DashboardPage() {
     setPrevWeight("");
     setPrevDate(new Date().toISOString().slice(0, 10));
   };
+
+  const handleDeleteAccount = async () => {
+    if (!confirm("Are you sure you want to delete your account? This action cannot be undone.")) return;
+    if (!session?.user?.id) return;
+
+    try {
+      const res = await fetch('/api/auth/delete', {
+        method: 'DELETE',
+        body: JSON.stringify({ userId: session.user.id }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (res.ok) {
+        await signOut({ callbackUrl: '/' });
+      } else {
+        showToast("Failed to delete account", "error");
+      }
+    } catch (e) {
+      showToast("Error deleting account", "error");
+    }
+  }
 
   const handleInputChange = (field: keyof UserData, value: string) => {
     setUserData((prev) => ({
@@ -444,7 +532,7 @@ export default function DashboardPage() {
   // Red (0%) -> Yellow/Orange (50%) -> Green (100%)
   const getProgressGradient = (percentage: number) => {
     const clampedPercentage = Math.min(100, Math.max(0, percentage));
-    
+
     if (clampedPercentage <= 50) {
       // Red to Yellow (0% to 50%)
       const ratio = clampedPercentage / 50;
@@ -497,7 +585,7 @@ export default function DashboardPage() {
     { name: "Glass of water", ml: 250, icon: "/icons/drinks/glass-of-water.png" },
     { name: "Cup of tea/coffee", ml: 250, icon: "/icons/drinks/coffee.png" },
     { name: "Small bottle", ml: 500, icon: "/icons/drinks/water-bottle.png" },
-     { name: "Mug of coffee/tea", ml: 300, icon: "/icons/drinks/mug-of-coffee.png" },
+    { name: "Mug of coffee/tea", ml: 300, icon: "/icons/drinks/mug-of-coffee.png" },
     { name: "Large bottle", ml: 1500, icon: "/icons/drinks/big-water.png" },
     { name: "Can of soda", ml: 330, icon: "/icons/drinks/soda-can.png" },
     { name: "Isotonic drink", ml: 500, icon: "/icons/drinks/energy-drink-bottle.png" },
@@ -506,6 +594,7 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen p-8 transition-colors duration-300 bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-white">
+      <OnlineIndicator />
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-3">
           <div
@@ -513,8 +602,8 @@ export default function DashboardPage() {
               ${toast.type === "success"
                 ? "bg-emerald-600 text-white border-emerald-500"
                 : toast.type === "error"
-                ? "bg-red-600 text-white border-red-500"
-                : "bg-slate-800 text-white border-slate-700"}
+                  ? "bg-red-600 text-white border-red-500"
+                  : "bg-slate-800 text-white border-slate-700"}
             `}
           >
             {toast.message}
@@ -523,7 +612,11 @@ export default function DashboardPage() {
       )}
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-8 relative">
+          <div className="absolute right-0 top-0 flex items-center gap-2 text-orange-500 font-bold animate-pulse">
+            <Flame className="w-6 h-6 fill-orange-500" />
+            <span>{userStreak}</span>
+          </div>
           <h1 className="text-4xl font-bold mb-2">Wellness Dashboard</h1>
           <p className="text-lg opacity-75">
             Track your health and fitness journey
@@ -577,7 +670,7 @@ export default function DashboardPage() {
                     <p className="text-gray-600 dark:text-gray-300">
                       {userData.gender
                         ? userData.gender.charAt(0).toUpperCase() +
-                          userData.gender.slice(1)
+                        userData.gender.slice(1)
                         : "–"}
                     </p>
                   </div>
@@ -590,8 +683,8 @@ export default function DashboardPage() {
                       ? userData.goal === "gain"
                         ? "Gain Weight"
                         : userData.goal === "lose"
-                        ? "Lose Weight"
-                        : "Maintain Weight"
+                          ? "Lose Weight"
+                          : "Maintain Weight"
                       : "–"}
                   </p>
                 </div>
@@ -603,8 +696,8 @@ export default function DashboardPage() {
                       ? userData.sportFrequency === "daily"
                         ? "Daily"
                         : userData.sportFrequency === "few"
-                        ? "Few times a week"
-                        : "Rarely"
+                          ? "Few times a week"
+                          : "Rarely"
                       : "–"}
                   </p>
                 </div>
@@ -721,8 +814,8 @@ export default function DashboardPage() {
                           100,
                           caloriesGoal
                             ? Math.round(
-                                (consumedCalories / caloriesGoal) * 100
-                              )
+                              (consumedCalories / caloriesGoal) * 100
+                            )
                             : 0
                         )}%`,
                         background: getProgressGradient(
@@ -739,8 +832,8 @@ export default function DashboardPage() {
                     {consumedCalories} / {caloriesGoal ?? "–"} kcal (
                     {caloriesGoal
                       ? `${Math.round(
-                          (consumedCalories / caloriesGoal) * 100
-                        )}%`
+                        (consumedCalories / caloriesGoal) * 100
+                      )}%`
                       : "–"}
                     )
                   </p>
@@ -946,13 +1039,13 @@ export default function DashboardPage() {
                                   const localUpdated = history.map((h) =>
                                     h.id === entry.id
                                       ? {
-                                          ...h,
-                                          date: new Date(
-                                            editDate
-                                          ).toLocaleDateString(),
-                                          dateISO: editDate,
-                                          weight: editWeight,
-                                        }
+                                        ...h,
+                                        date: new Date(
+                                          editDate
+                                        ).toLocaleDateString(),
+                                        dateISO: editDate,
+                                        weight: editWeight,
+                                      }
                                       : h
                                   );
                                   const normalized =
@@ -986,7 +1079,7 @@ export default function DashboardPage() {
                                 setEditingId(entry.id);
                                 setEditDate(
                                   entry.dateISO ||
-                                    new Date().toISOString().slice(0, 10)
+                                  new Date().toISOString().slice(0, 10)
                                 );
                                 setEditWeight(String(entry.weight));
                               }}
@@ -1077,7 +1170,7 @@ export default function DashboardPage() {
               <CardHeader>
                 <CardTitle>Personal Data</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 pb-24">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="weight">Weight (kg)</Label>
@@ -1229,6 +1322,24 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   )}
+                </div>
+
+                <div className="space-y-4 pt-4 border-t dark:border-gray-700 mt-6">
+                  <Button
+                    onClick={() => signOut({ callbackUrl: '/' })}
+                    variant="outline"
+                    className="w-full text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-900/20"
+                  >
+                    Log out
+                  </Button>
+
+                  <Button
+                    onClick={handleDeleteAccount}
+                    variant="destructive"
+                    className="w-full"
+                  >
+                    Delete Account
+                  </Button>
                 </div>
               </CardContent>
             </Card>

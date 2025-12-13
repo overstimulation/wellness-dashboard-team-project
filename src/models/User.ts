@@ -25,6 +25,13 @@ const UserSchema = new Schema({
     type: Date,
     default: Date.now,
   },
+  streak: {
+    type: Number,
+    default: 0,
+  },
+  lastLogDate: {
+    type: String, // YYYY-MM-DD
+  },
 });
 
 const User = models.User || model('User', UserSchema);
