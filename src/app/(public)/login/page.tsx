@@ -24,6 +24,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import Link from "next/link";
+import BackgroundEmojis from "@/components/BackgroundEmojis";
 
 const formSchema = z.object({
   email: z.string().email({
@@ -83,11 +84,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen">
-      <Card className="w-full max-w-md">
+    <div className="flex items-center justify-center min-h-screen relative overflow-hidden bg-neutral-50 dark:bg-gray-950 transition-colors duration-300">
+      <BackgroundEmojis />
+      <Card className="w-full max-w-md relative z-10 bg-white/30 dark:bg-black/30 backdrop-blur-md shadow-xl border-white/20 dark:border-white/10">
         <CardHeader>
-          <CardTitle>Login</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-blue-600 dark:text-blue-400">Login</CardTitle>
+          <CardDescription className="text-gray-700 dark:text-gray-300">
             Welcome back! Please login to your account.
           </CardDescription>
         </CardHeader>
@@ -99,9 +101,9 @@ export default function LoginPage() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel className="text-gray-700 dark:text-gray-200">Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="your.email@example.com" {...field} />
+                      <Input placeholder="your.email@example.com" {...field} className="bg-white/50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -112,19 +114,20 @@ export default function LoginPage() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel className="text-gray-700 dark:text-gray-200">Password</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
                         placeholder="********"
                         {...field}
+                        className="bg-white/50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700"
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={isLoading}>
                 {isLoading ? "Logging in..." : "Login"}
               </Button>
               {errorMessage && (
@@ -134,9 +137,9 @@ export default function LoginPage() {
               )}
             </form>
           </Form>
-          <div className="mt-4 text-center text-sm">
+          <div className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
             Don't have an account?{" "}
-            <Link href="/register" className="underline">
+            <Link href="/register" className="underline hover:text-blue-600 dark:hover:text-blue-400">
               Register
             </Link>
           </div>
