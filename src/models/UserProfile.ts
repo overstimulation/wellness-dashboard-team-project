@@ -10,6 +10,7 @@ export interface IUserProfile extends Document {
   city: string;
   activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
   weightGoal: number;
+  targetWeight: number;
   goalType: 'lose' | 'maintain' | 'gain';
   hasCompletedOnboarding: boolean;
 }
@@ -44,6 +45,9 @@ const UserProfileSchema: Schema<IUserProfile> = new Schema({
     enum: ['sedentary', 'light', 'moderate', 'active', 'very_active'],
   },
   weightGoal: {
+    type: Number,
+  },
+  targetWeight: {
     type: Number,
   },
   goalType: {

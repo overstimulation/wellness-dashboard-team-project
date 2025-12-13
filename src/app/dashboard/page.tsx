@@ -29,6 +29,7 @@ interface UserData {
   gender: string;
   goal: string;
   sportFrequency: string;
+  targetWeight: string;
 }
 
 // Typy dla wpisów historii
@@ -57,6 +58,7 @@ export default function DashboardPage() {
     gender: "",
     goal: "",
     sportFrequency: "",
+    targetWeight: "",
   });
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [bmi, setBmi] = useState<number | null>(null);
@@ -151,24 +153,22 @@ export default function DashboardPage() {
 
           if (pRes.ok) {
             const pJson = await pRes.json();
-            if (pJson?.user?.streak) {
+            if (pJson?.user?.streak !== undefined) {
+              console.log("Setting streak from API:", pJson.user.streak);
               setUserStreak(pJson.user.streak);
             }
             if (pJson?.profile) {
               const prof = pJson.profile;
               setUserData((prev) => ({
                 ...prev,
-                age: prof.age !== undefined ? String(prof.age) : prev.age,
-                weight:
-                  prof.currentWeight !== undefined
-                    ? String(prof.currentWeight)
-                    : prev.weight,
-                height:
-                  prof.height !== undefined ? String(prof.height) : prev.height,
-                city: prof.city ?? prev.city,
-                gender: prof.biologicalSex ?? prev.gender,
-                sportFrequency: prof.activityLevel ?? prev.sportFrequency,
-                goal: prof.goalType ?? prev.goal,
+                city: prof.city ?? prev.city ?? "",
+                gender: prof.biologicalSex ?? prev.gender ?? "",
+                sportFrequency: prof.activityLevel ? (prof.activityLevel === 'sedentary' || prof.activityLevel === 'light' ? 'rare' : (prof.activityLevel === 'moderate' ? 'few' : 'daily')) : prev.sportFrequency ?? "",
+                goal: prof.goalType ?? prev.goal ?? "",
+                targetWeight: prof.targetWeight !== undefined ? String(prof.targetWeight) : prev.targetWeight ?? "",
+                height: prof.height !== undefined ? String(prof.height) : prev.height ?? "",
+                weight: prof.currentWeight !== undefined ? String(prof.currentWeight) : prev.weight ?? "",
+                age: prof.age !== undefined ? String(prof.age) : prev.age ?? "",
               }));
             }
           }
@@ -209,17 +209,37 @@ export default function DashboardPage() {
       }
     }
 
-    // Load today's nutrition logs (per-date keys)
-    try {
-      const today = new Date().toISOString().slice(0, 10);
-      const cal = localStorage.getItem(`calories_${today}`);
-      const water = localStorage.getItem(`water_${today}`);
-      if (cal) setConsumedCalories(Number(cal));
-      if (water) setConsumedWater(Number(water));
-    } catch (e) {
-      // ignore
+    // Load today's nutrition logs (prioritize server data, fallback to local with user scope)
+    if (userId) {
+      // We'll handle this inside the async block above or here if we have history
+      // But actually, we should do it after we setHistory to avoid race conditions.
+      // However, we can also check the localStorage here if we have userId.
+      // Better approach: when history is set from server, update state.
     }
   }, [status, session?.user?.id]);
+
+  // Effect to sync state from history once history is loaded (server priority)
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const todayEntry = history.find(h => h.dateISO === today);
+
+    if (todayEntry) {
+      // If server has data, trust it
+      if (todayEntry.calories !== undefined) setConsumedCalories(todayEntry.calories);
+      if (todayEntry.water !== undefined) setConsumedWater(todayEntry.water);
+    } else {
+      // Fallback to scoped local storage
+      try {
+        const cal = localStorage.getItem(`user_${userId}_calories_${today}`);
+        const water = localStorage.getItem(`user_${userId}_water_${today}`);
+        if (cal) setConsumedCalories(Number(cal));
+        if (water) setConsumedWater(Number(water));
+      } catch (e) { }
+    }
+  }, [history, session?.user?.id]);
 
   // Custom hook to sync streak from profile when saving
   const refreshStreak = async () => {
@@ -293,11 +313,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     try {
-      const today = new Date().toISOString().slice(0, 10);
-      localStorage.setItem(`calories_${today}`, String(consumedCalories));
-      localStorage.setItem(`water_${today}`, String(consumedWater));
+      if (session?.user?.id) {
+        const today = new Date().toISOString().slice(0, 10);
+        localStorage.setItem(`user_${session.user.id}_calories_${today}`, String(consumedCalories));
+        localStorage.setItem(`user_${session.user.id}_water_${today}`, String(consumedWater));
+      }
     } catch (e) { }
-  }, [consumedCalories, consumedWater]);
+  }, [consumedCalories, consumedWater, session?.user?.id]);
 
   // Check if goals are reached and show popup
   useEffect(() => {
@@ -731,8 +753,41 @@ export default function DashboardPage() {
                     Complete your personal data to see health metrics
                   </p>
                 )}
+
+                {/* Estimated Date Integrated */}
+                {(() => {
+                  // Only show if we have minimal data
+                  if (!userData.weight || !userData.targetWeight || !userData.goal || !bmr) return null;
+
+                  const current = parseFloat(userData.weight);
+                  const target = parseFloat(userData.targetWeight);
+                  const diff = current - target;
+                  const dailyDiff = userData.goal === 'lose' ? 500 : (userData.goal === 'gain' ? 500 : 0);
+
+                  if (dailyDiff === 0) return null;
+
+                  // Already reached?
+                  if ((userData.goal === 'lose' && diff <= 0) || (userData.goal === 'gain' && diff >= 0)) return (
+                    <div className="text-center p-4 rounded-lg bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                      <p className="font-bold">Goal Reached! 🎉</p>
+                    </div>
+                  );
+
+                  const days = Math.abs((diff * 7700) / dailyDiff);
+                  const futureDate = new Date();
+                  futureDate.setDate(futureDate.getDate() + days);
+
+                  return (
+                    <div className="text-center p-4 rounded-lg bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-300">
+                      <p className="text-2xl font-bold">{futureDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                      <p className="text-sm opacity-75">Estimated Goal Date</p>
+                      <p className="text-xs mt-1">({Math.round(days)} days left)</p>
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
+
 
             {/* Recent History */}
             <Card className="md:col-span-2 dark:bg-gray-800 dark:border-gray-700">
@@ -753,7 +808,7 @@ export default function DashboardPage() {
                         >
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="date" />
-                          <YAxis />
+                          <YAxis domain={['auto', 'auto']} />
                           <Tooltip content={<CustomTooltip />} />
                           <Line
                             type="monotone"
@@ -1193,6 +1248,19 @@ export default function DashboardPage() {
                       value={userData.height}
                       onChange={(e) =>
                         handleInputChange("height", e.target.value)
+                      }
+                      type="number"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="targetWeight">Target Weight (kg)</Label>
+                    <Input
+                      id="targetWeight"
+                      placeholder="e.g., 65"
+                      value={userData.targetWeight}
+                      onChange={(e) =>
+                        handleInputChange("targetWeight", e.target.value)
                       }
                       type="number"
                     />

@@ -34,6 +34,10 @@ const UserSchema = new Schema({
   },
 });
 
+// Force model recompilation in dev to pick up schema changes
+if (process.env.NODE_ENV === 'development') {
+  delete models.User;
+}
 const User = models.User || model('User', UserSchema);
 
 export default User;

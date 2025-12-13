@@ -48,6 +48,34 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  async function handleDemoLogin() {
+    setIsLoading(true);
+    try {
+      // 1. Seed the account
+      const seedRes = await fetch('/api/seed', { method: 'POST' });
+      if (!seedRes.ok) throw new Error("Failed to seed demo account");
+      const { email, password } = await seedRes.json();
+
+      // 2. Sign in
+      const result = await signIn("credentials", {
+        redirect: false,
+        email,
+        password,
+      });
+
+      if (!result || result.error) {
+        setErrorMessage("Demo login failed");
+      } else {
+        router.push("/dashboard");
+      }
+    } catch (e) {
+      console.error(e);
+      setErrorMessage("Could not start demo mode");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     setErrorMessage(null);
@@ -136,6 +164,22 @@ export default function LoginPage() {
               />
               <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={isLoading}>
                 {isLoading ? "Logging in..." : "Login"}
+              </Button>
+
+              <div className="relative flex items-center justify-center my-4">
+                <div className="border-t border-gray-300 dark:border-gray-600 w-full"></div>
+                <span className="bg-transparent px-2 text-xs text-gray-500 uppercase">Or</span>
+                <div className="border-t border-gray-300 dark:border-gray-600 w-full"></div>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-blue-400 text-blue-600 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                onClick={handleDemoLogin}
+                disabled={isLoading}
+              >
+                Try Demo Account
               </Button>
               {errorMessage && (
                 <p className="mt-2 text-sm text-destructive text-center">
