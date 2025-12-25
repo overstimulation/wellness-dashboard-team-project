@@ -175,6 +175,16 @@ export default function LoginPage() {
               <Button
                 type="button"
                 variant="outline"
+                className="w-full border-gray-300 text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+                disabled={isLoading}
+              >
+                Continue with Google
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
                 className="w-full border-blue-400 text-blue-600 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-400 dark:hover:bg-blue-950/30"
                 onClick={handleDemoLogin}
                 disabled={isLoading}
