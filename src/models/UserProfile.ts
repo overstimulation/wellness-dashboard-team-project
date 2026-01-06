@@ -13,6 +13,7 @@ export interface IUserProfile extends Document {
   targetWeight: number;
   goalType: 'lose' | 'maintain' | 'gain';
   hasCompletedOnboarding: boolean;
+  maxCapPercentage: number; // 0 = infinity, 100/200/300 = percentage cap
 }
 
 const UserProfileSchema: Schema<IUserProfile> = new Schema({
@@ -57,6 +58,11 @@ const UserProfileSchema: Schema<IUserProfile> = new Schema({
   hasCompletedOnboarding: {
     type: Boolean,
     default: false,
+  },
+  maxCapPercentage: {
+    type: Number,
+    enum: [100, 200, 300, 0], // 0 = infinity (no cap)
+    default: 0,
   },
 });
 

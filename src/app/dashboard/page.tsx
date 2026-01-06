@@ -48,7 +48,7 @@ export default function DashboardPage() {
   const router = useRouter();
 
   const [tab, setTab] = useState<
-    "dashboard" | "history" | "settings" | "nutrition"
+    "dashboard" | "history" | "settings" | "nutrition" | "data"
   >("dashboard");
   const [userData, setUserData] = useState<UserData>({
     weight: "",
@@ -85,6 +85,9 @@ export default function DashboardPage() {
   const [caloriesGoalReached, setCaloriesGoalReached] = useState<boolean>(false);
   const [waterGoalReached, setWaterGoalReached] = useState<boolean>(false);
   const [userStreak, setUserStreak] = useState<number>(0);
+  const [maxCapPercentage, setMaxCapPercentage] = useState<number>(0); // 0 = infinity, 100/200/300 percentage
+  const [weatherTemp, setWeatherTemp] = useState<number | null>(null);
+  const [weatherDescription, setWeatherDescription] = useState<string>("");
   const [toast, setToast] = useState<
     { message: string; type: "success" | "info" | "error" } | null
   >(null);
@@ -170,6 +173,25 @@ export default function DashboardPage() {
                 weight: prof.currentWeight !== undefined ? String(prof.currentWeight) : prev.weight ?? "",
                 age: prof.age !== undefined ? String(prof.age) : prev.age ?? "",
               }));
+              // Load maxCapPercentage from profile
+              if (prof.maxCapPercentage !== undefined) {
+                setMaxCapPercentage(prof.maxCapPercentage);
+              }
+              // Fetch weather if city is set
+              if (prof.city) {
+                try {
+                  const weatherRes = await fetch(`/api/weather?city=${encodeURIComponent(prof.city)}`);
+                  if (weatherRes.ok) {
+                    const weatherData = await weatherRes.json();
+                    if (weatherData.temp !== undefined) {
+                      setWeatherTemp(weatherData.temp);
+                      setWeatherDescription(weatherData.description || "");
+                    }
+                  }
+                } catch (e) {
+                  console.error("Failed to fetch weather:", e);
+                }
+              }
             }
           }
           if (hRes.ok) {
@@ -306,20 +328,108 @@ export default function DashboardPage() {
     else if (freq === "rare") multiplier = 1.25;
 
     let goal = Math.round(bmr * multiplier);
-    if (userData.goal === "lose") goal -= 300;
-    if (userData.goal === "gain") goal += 300;
-    setCaloriesGoal(goal);
-  }, [bmr, userData.sportFrequency, userData.goal]);
 
-  useEffect(() => {
-    try {
-      if (session?.user?.id) {
-        const today = new Date().toISOString().slice(0, 10);
-        localStorage.setItem(`user_${session.user.id}_calories_${today}`, String(consumedCalories));
-        localStorage.setItem(`user_${session.user.id}_water_${today}`, String(consumedWater));
+    // Auto-infer goal from comparing current weight to target weight
+    const currentW = parseFloat(userData.weight);
+    const targetW = parseFloat(userData.targetWeight);
+
+    if (!isNaN(currentW) && !isNaN(targetW)) {
+      if (currentW > targetW) {
+        // User wants to lose weight
+        goal -= 300;
+      } else if (currentW < targetW) {
+        // User wants to gain weight
+        goal += 300;
       }
+      // If equal, maintain weight (no adjustment)
+    } else if (userData.goal) {
+      // Fallback to explicit goal if target weight not set
+      if (userData.goal === "lose") goal -= 300;
+      if (userData.goal === "gain") goal += 300;
+    }
+
+    setCaloriesGoal(goal);
+  }, [bmr, userData.sportFrequency, userData.weight, userData.targetWeight, userData.goal]);
+
+  // Adjust water goal based on weather temperature
+  useEffect(() => {
+    let baseWater = 2000; // ml
+    if (weatherTemp !== null && weatherTemp > 25) {
+      // Add 250ml for every 5°C above 25°C
+      const extraWater = Math.floor((weatherTemp - 25) / 5) * 250;
+      baseWater += extraWater;
+    }
+    setWaterGoal(baseWater);
+  }, [weatherTemp]);
+
+  // Fetch weather when city changes
+  useEffect(() => {
+    if (!userData.city) return;
+
+    const fetchWeather = async () => {
+      try {
+        const res = await fetch(`/api/weather?city=${encodeURIComponent(userData.city)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.temp !== undefined) {
+            setWeatherTemp(data.temp);
+            setWeatherDescription(data.description || "");
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch weather:", e);
+      }
+    };
+
+    fetchWeather();
+  }, [userData.city]);
+
+
+  // Auto-sync nutrition data to server and update streak
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Save to localStorage
+    try {
+      localStorage.setItem(`user_${userId}_calories_${today}`, String(consumedCalories));
+      localStorage.setItem(`user_${userId}_water_${today}`, String(consumedWater));
     } catch (e) { }
-  }, [consumedCalories, consumedWater, session?.user?.id]);
+
+    // Debounce server sync - only sync if we have meaningful values
+    if (consumedCalories === 0 && consumedWater === 0) return;
+
+    // Sync to server (with goals for streak calculation)
+    const syncToServer = async () => {
+      try {
+        const res = await fetch(`/api/history`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId,
+            dateISO: today,
+            date: today,
+            calories: consumedCalories,
+            water: consumedWater,
+            caloriesGoal: caloriesGoal,
+            waterGoal: waterGoal,
+          }),
+        });
+        if (res.ok) {
+          // Refresh streak after successful sync
+          await refreshStreak();
+        }
+      } catch (e) {
+        console.error("Failed to sync nutrition to server", e);
+      }
+    };
+
+    // Use a small delay to debounce rapid changes
+    const timeoutId = setTimeout(syncToServer, 500);
+    return () => clearTimeout(timeoutId);
+  }, [consumedCalories, consumedWater, session?.user?.id, caloriesGoal, waterGoal]);
 
   // Check if goals are reached and show popup
   useEffect(() => {
@@ -646,8 +756,8 @@ export default function DashboardPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex space-x-4 mb-8 justify-center">
-          {["dashboard", "history", "nutrition", "settings"].map((t) => (
+        <div className="flex space-x-4 mb-8 justify-center flex-wrap gap-y-2">
+          {["dashboard", "history", "nutrition", "data", "settings"].map((t) => (
             <Button
               key={t}
               variant={tab === t ? "default" : "outline"}
@@ -701,11 +811,11 @@ export default function DashboardPage() {
                 <div className="pt-4 border-t">
                   <p className="font-semibold">Goal</p>
                   <p className="text-gray-600 dark:text-gray-300">
-                    {userData.goal
-                      ? userData.goal === "gain"
-                        ? "Gain Weight"
-                        : userData.goal === "lose"
-                          ? "Lose Weight"
+                    {userData.weight && userData.targetWeight
+                      ? parseFloat(userData.weight) > parseFloat(userData.targetWeight)
+                        ? "Lose Weight"
+                        : parseFloat(userData.weight) < parseFloat(userData.targetWeight)
+                          ? "Gain Weight"
                           : "Maintain Weight"
                       : "–"}
                   </p>
@@ -894,22 +1004,41 @@ export default function DashboardPage() {
                   </p>
                 </div>
 
-                <div className="mt-4 flex gap-2">
+                <div className="mt-4 flex gap-2 flex-wrap">
                   <Input
                     placeholder="kcal"
                     value={calInput}
                     onChange={(e) => setCalInput(e.target.value)}
+                    className="flex-1 min-w-[80px]"
                   />
                   <Button
                     onClick={() => {
                       const v = Number(calInput);
                       if (!isNaN(v) && v > 0) {
-                        setConsumedCalories((c) => c + v);
+                        const rounded = Math.max(1, Math.round(v)); // Round, ensure at least 1
+                        // Apply max cap if set
+                        const maxCap = maxCapPercentage === 0
+                          ? Infinity
+                          : (caloriesGoal ?? 0) * (maxCapPercentage / 100);
+                        setConsumedCalories((c) => Math.min(maxCap, c + rounded));
                         setCalInput("");
                       }
                     }}
                   >
                     Add
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const v = Number(calInput);
+                      if (!isNaN(v) && v > 0) {
+                        const rounded = Math.max(1, Math.round(v)); // Round, ensure at least 1
+                        setConsumedCalories((c) => Math.max(0, c - rounded));
+                        setCalInput("");
+                      }
+                    }}
+                  >
+                    Remove
                   </Button>
                   <Button
                     variant="outline"
@@ -920,7 +1049,10 @@ export default function DashboardPage() {
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => setConsumedCalories(0)}
+                    onClick={() => {
+                      setConsumedCalories(0);
+                      setCaloriesGoalReached(false);
+                    }}
                   >
                     Reset
                   </Button>
@@ -935,6 +1067,11 @@ export default function DashboardPage() {
               <CardContent>
                 <p className="text-sm text-muted-foreground">
                   Daily goal: {waterGoal} ml
+                  {weatherTemp !== null && (
+                    <span className="ml-2">
+                      ({Math.round(weatherTemp)}°C{weatherDescription ? `, ${weatherDescription}` : ""})
+                    </span>
+                  )}
                 </p>
                 <div className="mt-4">
                   <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
@@ -958,17 +1095,23 @@ export default function DashboardPage() {
                   </p>
                 </div>
 
-                <div className="mt-4 flex gap-2">
+                <div className="mt-4 flex gap-2 flex-wrap">
                   <Input
                     placeholder="ml"
                     value={waterInput}
                     onChange={(e) => setWaterInput(e.target.value)}
+                    className="flex-1 min-w-[80px]"
                   />
                   <Button
                     onClick={() => {
                       const v = Number(waterInput);
                       if (!isNaN(v) && v > 0) {
-                        setConsumedWater((w) => w + v);
+                        const rounded = Math.max(1, Math.round(v)); // Round, ensure at least 1
+                        // Apply max cap if set
+                        const maxCap = maxCapPercentage === 0
+                          ? Infinity
+                          : waterGoal * (maxCapPercentage / 100);
+                        setConsumedWater((w) => Math.min(maxCap, w + rounded));
                         setWaterInput("");
                       }
                     }}
@@ -977,12 +1120,31 @@ export default function DashboardPage() {
                   </Button>
                   <Button
                     variant="outline"
+                    onClick={() => {
+                      const v = Number(waterInput);
+                      if (!isNaN(v) && v > 0) {
+                        const rounded = Math.max(1, Math.round(v)); // Round, ensure at least 1
+                        setConsumedWater((w) => Math.max(0, w - rounded));
+                        setWaterInput("");
+                      }
+                    }}
+                  >
+                    Remove
+                  </Button>
+                  <Button
+                    variant="outline"
                     onClick={() => setShowWaterModal(true)}
                     className="px-3"
                   >
                     <GlassWater className="h-4 w-4" />
                   </Button>
-                  <Button variant="outline" onClick={() => setConsumedWater(0)}>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setConsumedWater(0);
+                      setWaterGoalReached(false);
+                    }}
+                  >
                     Reset
                   </Button>
                 </div>
@@ -1054,14 +1216,14 @@ export default function DashboardPage() {
                                 if (userId) {
                                   try {
                                     const res = await fetch(`/api/history`, {
-                                      method: "PUT",
+                                      method: "POST",
                                       headers: {
                                         "Content-Type": "application/json",
                                       },
                                       body: JSON.stringify({
-                                        entryId: entry.id,
+                                        userId,
                                         dateISO,
-                                        date: displayDate,
+                                        date: dateISO,
                                         weight: Number(editWeight),
                                       }),
                                     });
@@ -1070,12 +1232,12 @@ export default function DashboardPage() {
                                       const updated = {
                                         id: json.entry._id,
                                         date: json.entry.date,
-                                        dateISO: json.entry.dateISO,
+                                        dateISO: json.entry.date,
                                         weight: json.entry.weight,
                                       } as HistoryEntry;
-                                      const merged = history.map((h) =>
-                                        h.id === entry.id ? updated : h
-                                      );
+                                      // Handle upsert: might be same date as old entry or different
+                                      let merged = history.filter((h) => h.id !== entry.id && h.dateISO !== updated.dateISO);
+                                      merged.push(updated);
                                       const normalized =
                                         normalizeHistory(merged);
                                       setHistory(normalized);
@@ -1218,8 +1380,8 @@ export default function DashboardPage() {
           </Card>
         )}
 
-        {/* Settings Tab */}
-        {tab === "settings" && (
+        {/* Data Tab - Personal Information */}
+        {tab === "data" && (
           <div className="max-w-2xl mx-auto">
             <Card className="dark:bg-gray-800 dark:border-gray-700">
               <CardHeader>
@@ -1314,24 +1476,18 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="goal">Goal</Label>
-                  <Select
-                    id="goal"
-                    value={userData.goal}
-                    onChange={(e) => handleInputChange("goal", e.target.value)}
-                    style={{
-                      colorScheme: document.documentElement.classList.contains(
-                        "dark"
-                      )
-                        ? "dark"
-                        : "light",
-                    }}
-                  >
-                    <option value="">Select your goal</option>
-                    <option value="gain">Gain weight</option>
-                    <option value="lose">Lose weight</option>
-                    <option value="maintain">Maintain weight</option>
-                  </Select>
+                  <Label>Goal</Label>
+                  <p className="text-sm text-muted-foreground border rounded-md p-2 bg-muted/30">
+                    {userData.weight && userData.targetWeight ? (
+                      parseFloat(userData.weight) > parseFloat(userData.targetWeight)
+                        ? "🔻 Lose weight (auto-detected from weight → target)"
+                        : parseFloat(userData.weight) < parseFloat(userData.targetWeight)
+                          ? "🔺 Gain weight (auto-detected from weight → target)"
+                          : "⚖️ Maintain weight (weight = target)"
+                    ) : (
+                      "Set weight and target weight to auto-detect goal"
+                    )}
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -1391,8 +1547,67 @@ export default function DashboardPage() {
                     </div>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
+        {/* Settings Tab - App Settings & Account */}
+        {tab === "settings" && (
+          <div className="max-w-2xl mx-auto">
+            <Card className="dark:bg-gray-800 dark:border-gray-700">
+              <CardHeader>
+                <CardTitle>Settings</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Max Cap Setting */}
+                <div className="space-y-2">
+                  <Label htmlFor="maxCap">Maximum Value Cap</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Limit how much you can log above your daily goal. For example, 200% means you can log up to twice your goal.
+                  </p>
+                  <Select
+                    id="maxCap"
+                    value={String(maxCapPercentage)}
+                    onChange={async (e) => {
+                      const newCap = Number(e.target.value);
+                      setMaxCapPercentage(newCap);
+                      // Save to server
+                      const userId = session?.user?.id;
+                      if (userId) {
+                        try {
+                          await fetch(`/api/profile`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              userId,
+                              userData: { maxCapPercentage: newCap },
+                            }),
+                          });
+                          showToast("Settings saved!", "success");
+                        } catch (e) {
+                          console.error("Failed to save max cap", e);
+                        }
+                      }
+                    }}
+                    style={{
+                      colorScheme: document.documentElement.classList.contains(
+                        "dark"
+                      )
+                        ? "dark"
+                        : "light",
+                    }}
+                  >
+                    <option value="100">100% (No excess)</option>
+                    <option value="200">200%</option>
+                    <option value="300">300%</option>
+                    <option value="0">∞ (No limit)</option>
+                  </Select>
+                </div>
+
+                {/* Account Actions */}
                 <div className="space-y-4 pt-4 border-t dark:border-gray-700 mt-6">
+                  <p className="text-sm font-medium text-muted-foreground">Account</p>
                   <Button
                     onClick={() => signOut({ callbackUrl: '/' })}
                     variant="outline"

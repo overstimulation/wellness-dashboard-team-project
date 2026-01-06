@@ -69,33 +69,32 @@ export async function POST(req: Request) {
       if (isCalorieGoalMet && isWaterGoalMet) {
         const user = await User.findById(userId);
         if (user) {
-          const today = dateISO; // Assuming dateISO is today "YYYY-MM-DD"
+          const today = dateISO; // The date being logged (YYYY-MM-DD)
           const lastLogDate = user.lastLogDate;
 
-          // Simple date check
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-          const yesterdayStr = yesterday.toISOString().slice(0, 10);
+          // Calculate yesterday relative to the logged date, not server time
+          const logDateObj = new Date(today + "T00:00:00Z");
+          const yesterdayObj = new Date(logDateObj);
+          yesterdayObj.setUTCDate(yesterdayObj.getUTCDate() - 1);
+          const yesterdayStr = yesterdayObj.toISOString().slice(0, 10);
 
-          // Current date object to compare days
-          const logDateObj = new Date(today);
-          const lastLogDateObj = lastLogDate ? new Date(lastLogDate) : null;
-
-          // We only increase streak if today hasn't been counted yet
+          // We only increase streak if this date hasn't been counted yet
           if (lastLogDate !== today) {
             if (lastLogDate === yesterdayStr) {
-              // Consecutive day
+              // Consecutive day - increment streak
               user.streak = (user.streak || 0) + 1;
-            } else if (!lastLogDate || lastLogDate < yesterdayStr) {
-              // Missed a day or first time
-              // If logging for today, reset to 1. 
-              // Note: If user logs for past dates, we might not want to reset current streak?
-              // For simplicity: strict Duolingo style often allows 'freeze' but here we just reset if broken.
-              // However, if I log for today and I missed yesterday, streak becomes 1.
+            } else if (!lastLogDate) {
+              // First log ever - start streak at 1
               user.streak = 1;
+            } else {
+              // Check if lastLogDate is before yesterday (gap in streak)
+              const lastLogObj = new Date(lastLogDate + "T00:00:00Z");
+              if (lastLogObj < yesterdayObj) {
+                // Missed a day - reset streak to 1
+                user.streak = 1;
+              }
+              // If lastLogDate is after yesterday (logging for past date), don't change streak
             }
-            // If I log for tomorrow (future), we probably shouldn't count it yet?
-            // Assuming user logs for "today".
 
             user.lastLogDate = today;
             await user.save();

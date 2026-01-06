@@ -42,7 +42,7 @@ export async function POST(req: Request) {
             currentWeight: 78,
             height: 180,
             biologicalSex: 'male',
-            city: 'Demo City',
+            city: 'Warsaw',
             activityLevel: 'moderate',
             weightGoal: 75,
             targetWeight: 75, // New field
