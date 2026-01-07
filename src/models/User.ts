@@ -25,8 +25,19 @@ const UserSchema = new Schema({
     type: Date,
     default: Date.now,
   },
+  streak: {
+    type: Number,
+    default: 0,
+  },
+  lastLogDate: {
+    type: String, // YYYY-MM-DD
+  },
 });
 
+// Force model recompilation in dev to pick up schema changes
+if (process.env.NODE_ENV === 'development') {
+  delete models.User;
+}
 const User = models.User || model('User', UserSchema);
 
 export default User;
