@@ -354,23 +354,29 @@ export default function DashboardPage() {
   // Adjust water goal based on weather temperature
   useEffect(() => {
     let baseWater = 2000; // ml
-    if (weatherTemp !== null && weatherTemp > 25) {
-      // Add 250ml for every 5°C above 25°C
-      const extraWater = Math.floor((weatherTemp - 25) / 5) * 250;
-      baseWater += extraWater;
+    if (weatherTemp !== null) {
+      console.log("Weather temp changed:", weatherTemp);
+      if (weatherTemp > 20) {
+        // Add 100ml for every 1°C above 20°C (much more noticeable)
+        const extraWater = Math.round((weatherTemp - 20) * 100);
+        baseWater += extraWater;
+      }
     }
+    console.log("Setting water goal to:", baseWater);
     setWaterGoal(baseWater);
   }, [weatherTemp]);
 
-  // Fetch weather when city changes
+  // Fetch weather when city changes (with debounce)
   useEffect(() => {
-    if (!userData.city) return;
+    if (!userData.city || userData.city.length < 2) return;
 
     const fetchWeather = async () => {
+      console.log("Fetching weather for:", userData.city);
       try {
         const res = await fetch(`/api/weather?city=${encodeURIComponent(userData.city)}`);
         if (res.ok) {
           const data = await res.json();
+          console.log("Weather data received:", data);
           if (data.temp !== undefined) {
             setWeatherTemp(data.temp);
             setWeatherDescription(data.description || "");
@@ -381,7 +387,9 @@ export default function DashboardPage() {
       }
     };
 
-    fetchWeather();
+    // Debounce: wait 1 second after user stops typing
+    const timeoutId = setTimeout(fetchWeather, 1000);
+    return () => clearTimeout(timeoutId);
   }, [userData.city]);
 
 
