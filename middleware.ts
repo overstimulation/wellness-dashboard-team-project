@@ -3,8 +3,19 @@ import { NextRequest, NextResponse } from "next/server";
 
 export default async function middleware(req: NextRequest) {
   // Use getToken instead of auth() because auth() imports mongoose models
-  // which don't work in Vercel's Edge Runtime
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  // which don't work in Vercel's Edge Runtime.
+  // On HTTPS (production), NextAuth v5 uses "__Secure-authjs.session-token"
+  // On HTTP (localhost), it uses "authjs.session-token"
+  const isSecure = req.nextUrl.protocol === "https:";
+  const cookieName = isSecure
+    ? "__Secure-authjs.session-token"
+    : "authjs.session-token";
+
+  const token = await getToken({
+    req,
+    secret: process.env.NEXTAUTH_SECRET,
+    cookieName,
+  });
   const isAuthenticated = !!token;
 
   const isAuthPage =
