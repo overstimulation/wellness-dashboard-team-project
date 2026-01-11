@@ -663,9 +663,23 @@ export default function DashboardPage() {
   }
 
   const handleInputChange = (field: keyof UserData, value: string) => {
+    let processedValue = value;
+
+    // Round numeric fields appropriately on blur/change
+    if (value !== "" && !isNaN(parseFloat(value))) {
+      const num = parseFloat(value);
+      if (field === "age" || field === "height") {
+        // Floor to whole number for age and height
+        processedValue = String(Math.floor(num));
+      } else if (field === "weight" || field === "targetWeight") {
+        // Round to 1 decimal place for weight values
+        processedValue = String(Math.round(num * 10) / 10);
+      }
+    }
+
     setUserData((prev) => ({
       ...prev,
-      [field]: value,
+      [field]: processedValue,
     }));
   };
 
