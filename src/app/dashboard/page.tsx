@@ -445,12 +445,20 @@ export default function DashboardPage() {
       setCaloriesGoalReached(true);
       showToast("🎉 Congratulations! You have reached today's calorie goal!", "success");
     }
+    // Reset flag if consumption drops below goal (so toast can reappear)
+    if (caloriesGoal && consumedCalories < caloriesGoal && caloriesGoalReached) {
+      setCaloriesGoalReached(false);
+    }
   }, [consumedCalories, caloriesGoal, caloriesGoalReached]);
 
   useEffect(() => {
     if (consumedWater >= waterGoal && !waterGoalReached) {
       setWaterGoalReached(true);
       showToast("💧 Great! You have reached today's water intake goal!", "success");
+    }
+    // Reset flag if consumption drops below goal (so toast can reappear)
+    if (consumedWater < waterGoal && waterGoalReached) {
+      setWaterGoalReached(false);
     }
   }, [consumedWater, waterGoal, waterGoalReached]);
 
