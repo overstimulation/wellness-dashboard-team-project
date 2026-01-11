@@ -381,9 +381,16 @@ export default function DashboardPage() {
             setWeatherTemp(data.temp);
             setWeatherDescription(data.description || "");
           }
+        } else {
+          // City not found - clear weather data to avoid stale info
+          setWeatherTemp(null);
+          setWeatherDescription("");
+          showToast("City not found. Please enter a valid city name.", "error");
         }
       } catch (e) {
         console.error("Failed to fetch weather:", e);
+        setWeatherTemp(null);
+        setWeatherDescription("");
       }
     };
 
@@ -572,6 +579,14 @@ export default function DashboardPage() {
 
   const addPreviousEntry = async () => {
     if (!prevDate || !prevWeight) return;
+
+    // Prevent future dates
+    const today = new Date().toISOString().slice(0, 10);
+    if (prevDate > today) {
+      showToast("Cannot add entries for future dates", "error");
+      return;
+    }
+
     const dateISO = new Date(prevDate).toISOString().slice(0, 10);
     const displayDate = new Date(dateISO).toLocaleDateString();
 
@@ -1214,6 +1229,7 @@ export default function DashboardPage() {
                             <input
                               type="date"
                               value={editDate}
+                              max={new Date().toISOString().slice(0, 10)}
                               onChange={(e) => setEditDate(e.target.value)}
                               className="border rounded p-2 bg-background"
                             />
@@ -1242,6 +1258,12 @@ export default function DashboardPage() {
                           <>
                             <Button
                               onClick={async () => {
+                                // Prevent future dates
+                                const today = new Date().toISOString().slice(0, 10);
+                                if (editDate > today) {
+                                  showToast("Cannot set entries to future dates", "error");
+                                  return;
+                                }
                                 // save edited entry
                                 const dateISO = new Date(editDate)
                                   .toISOString()
@@ -1570,6 +1592,7 @@ export default function DashboardPage() {
                         type="date"
                         className="h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base dark:bg-input/30"
                         value={prevDate}
+                        max={new Date().toISOString().slice(0, 10)}
                         onChange={(e) => setPrevDate(e.target.value)}
                       />
                       <input
