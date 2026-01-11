@@ -665,15 +665,22 @@ export default function DashboardPage() {
   const handleInputChange = (field: keyof UserData, value: string) => {
     let processedValue = value;
 
-    // Round numeric fields appropriately on blur/change
+    // Round and clamp numeric fields appropriately
     if (value !== "" && !isNaN(parseFloat(value))) {
-      const num = parseFloat(value);
-      if (field === "age" || field === "height") {
-        // Floor to whole number for age and height
-        processedValue = String(Math.floor(num));
+      let num = parseFloat(value);
+
+      if (field === "age") {
+        // Floor to whole number and clamp to 1-120 years
+        num = Math.max(1, Math.min(120, Math.floor(num)));
+        processedValue = String(num);
+      } else if (field === "height") {
+        // Floor to whole number and clamp to 50-250 cm
+        num = Math.max(50, Math.min(250, Math.floor(num)));
+        processedValue = String(num);
       } else if (field === "weight" || field === "targetWeight") {
-        // Round to 1 decimal place for weight values
-        processedValue = String(Math.round(num * 10) / 10);
+        // Round to 1 decimal place and clamp to 20-250 kg
+        num = Math.max(20, Math.min(250, Math.round(num * 10) / 10));
+        processedValue = String(num);
       }
     }
 
