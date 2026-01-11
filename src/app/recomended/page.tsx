@@ -21,7 +21,6 @@ export default function RecommendationsPage({
   const [customWater, setCustomWater] = useState("");
   const [customCalories, setCustomCalories] = useState("");
 
-  // trza to jakos wyciagnac, nie tykam backandu here
   const recommendedWater = weight * 35;
   const recommendedCalories = goal === "gain" ? 2500 : goal === "lose" ? 1800 : 2000;
 
