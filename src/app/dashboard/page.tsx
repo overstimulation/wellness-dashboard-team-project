@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Sandwich, GlassWater, X, Flame } from "lucide-react";
+import { Sandwich, GlassWater, X, Flame, Smile, Meh, Frown, Home, HeartPulse, Settings as SettingsIcon, Droplets, Brain, TrendingUp } from "lucide-react";
 import OnlineIndicator from "@/components/OnlineIndicator";
 import {
   ResponsiveContainer,
@@ -47,8 +47,9 @@ export default function DashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
+  const [activeCategory, setActiveCategory] = useState<"home" | "health" | "settings">("home");
   const [tab, setTab] = useState<
-    "dashboard" | "history" | "settings" | "nutrition" | "data"
+    "dashboard" | "history" | "settings" | "nutrition" | "data" | "mind"
   >("dashboard");
   const [userData, setUserData] = useState<UserData>({
     weight: "",
@@ -91,6 +92,10 @@ export default function DashboardPage() {
   const [toast, setToast] = useState<
     { message: string; type: "success" | "info" | "error" } | null
   >(null);
+  const [moodHistory, setMoodHistory] = useState<any[]>([]);
+  const [showMoodForm, setShowMoodForm] = useState(true);
+  const [currentMood, setCurrentMood] = useState<"sad" | "neutral" | "happy" | null>(null);
+  const [moodNotes, setMoodNotes] = useState("");
   const toastTimer = useRef<number | null>(null);
 
   const normalizeHistory = (raw: any[]): HistoryEntry[] => {
@@ -149,9 +154,10 @@ export default function DashboardPage() {
     if (userId) {
       (async () => {
         try {
-          const [pRes, hRes] = await Promise.all([
+          const [pRes, hRes, mRes] = await Promise.all([
             fetch(`/api/profile?userId=${userId}`),
             fetch(`/api/history?userId=${userId}`),
+            fetch(`/api/mood?userId=${userId}`),
           ]);
 
           if (pRes.ok) {
@@ -192,6 +198,15 @@ export default function DashboardPage() {
                   console.error("Failed to fetch weather:", e);
                 }
               }
+            }
+          }
+          if (mRes.ok) {
+            const mJson = await mRes.json();
+            if (mJson?.entries) {
+              setMoodHistory(mJson.entries);
+              const todayISO = new Date().toISOString().slice(0, 10);
+              const hasToday = mJson.entries.some((m: any) => m.dateISO === todayISO);
+              setShowMoodForm(!hasToday);
             }
           }
           if (hRes.ok) {
@@ -807,19 +822,66 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* Tabs */}
-        <div className="flex space-x-4 mb-8 justify-center flex-wrap gap-y-2">
-          {["dashboard", "history", "nutrition", "data", "settings"].map((t) => (
-            <Button
-              key={t}
-              variant={tab === t ? "default" : "outline"}
-              onClick={() => setTab(t as any)}
-              className="px-6 py-2"
-            >
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-            </Button>
-          ))}
+        {/* Tier 1 Navigation */}
+        <div className="flex space-x-4 mb-6 justify-center flex-wrap gap-y-2">
+          <Button
+            variant={activeCategory === "home" ? "default" : "outline"}
+            onClick={() => { setActiveCategory("home"); setTab("dashboard"); }}
+            className={`px-6 py-2 flex items-center gap-2 ${activeCategory === "home" ? "bg-slate-800 hover:bg-slate-900 border-transparent dark:bg-slate-200 dark:hover:bg-slate-300" : "dark:border-gray-700"}`}
+          >
+            <Home className="w-5 h-5" /> Home
+          </Button>
+          <Button
+            variant={activeCategory === "health" ? "default" : "outline"}
+            onClick={() => { setActiveCategory("health"); setTab("nutrition"); }}
+            className={`px-6 py-2 flex items-center gap-2 ${activeCategory === "health" ? "bg-rose-500 hover:bg-rose-600 text-white border-transparent" : "dark:border-gray-700"}`}
+          >
+            <HeartPulse className="w-5 h-5" /> My Health
+          </Button>
+          <Button
+            variant={activeCategory === "settings" ? "default" : "outline"}
+            onClick={() => { setActiveCategory("settings"); setTab("settings"); }}
+            className={`px-6 py-2 flex items-center gap-2 ${activeCategory === "settings" ? "bg-slate-500 hover:bg-slate-600 text-white border-transparent" : "dark:border-gray-700"}`}
+          >
+            <SettingsIcon className="w-5 h-5" /> Settings
+          </Button>
         </div>
+
+        {/* Tier 2 Navigation (Health Sub-menu) */}
+        {activeCategory === "health" && (
+          <div className="flex space-x-3 mb-8 justify-center flex-wrap gap-y-2 animate-in fade-in zoom-in duration-300">
+            <button
+              onClick={() => setTab("nutrition")}
+              className={`px-5 py-2 rounded-full flex items-center gap-2 font-medium transition-all duration-300 ${
+                tab === "nutrition" 
+                  ? "bg-blue-500/10 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 ring-2 ring-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]" 
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200"
+              }`}
+            >
+              <Droplets className="w-4 h-4" /> Nutrition
+            </button>
+            <button
+              onClick={() => setTab("mind")}
+              className={`px-5 py-2 rounded-full flex items-center gap-2 font-medium transition-all duration-300 ${
+                tab === "mind" 
+                  ? "bg-emerald-500/10 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400 ring-2 ring-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]" 
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200"
+              }`}
+            >
+              <Brain className="w-4 h-4" /> Mind
+            </button>
+            <button
+              onClick={() => setTab("history")}
+              className={`px-5 py-2 rounded-full flex items-center gap-2 font-medium transition-all duration-300 ${
+                tab === "history" 
+                  ? "bg-purple-500/10 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400 ring-2 ring-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]" 
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200"
+              }`}
+            >
+              <TrendingUp className="w-4 h-4" /> History
+            </button>
+          </div>
+        )}
 
         {/* Dashboard Tab */}
         {tab === "dashboard" && (
@@ -1439,14 +1501,16 @@ export default function DashboardPage() {
           </Card>
         )}
 
-        {/* Data Tab - Personal Information */}
-        {tab === "data" && (
-          <div className="max-w-2xl mx-auto">
+        {/* Settings Tab - Combined Profile & App Settings */}
+        {tab === "settings" && (
+          <div className="max-w-2xl mx-auto space-y-8 pb-24">
+            
+            {/* Section 1: Personal Profile */}
             <Card className="dark:bg-gray-800 dark:border-gray-700">
               <CardHeader>
-                <CardTitle>Personal Data</CardTitle>
+                <CardTitle>Personal Profile</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6 pb-24">
+              <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="weight">Weight (kg)</Label>
@@ -1574,50 +1638,13 @@ export default function DashboardPage() {
                 <Button className="w-full" onClick={handleSave} size="lg">
                   Save All Data
                 </Button>
-
-                {/* Previous-data setting */}
-                <div className="mt-6 p-4 border rounded bg-transparent dark:bg-input/30 border-input">
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={allowPreviousData}
-                      onChange={(e) => setAllowPreviousData(e.target.checked)}
-                    />
-                    <span className="text-sm">Allow adding previous data</span>
-                  </label>
-
-                  {allowPreviousData && (
-                    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2">
-                      <input
-                        type="date"
-                        className="h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base dark:bg-input/30"
-                        value={prevDate}
-                        max={new Date().toISOString().slice(0, 10)}
-                        onChange={(e) => setPrevDate(e.target.value)}
-                      />
-                      <input
-                        placeholder="Weight (kg)"
-                        className="h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base dark:bg-input/30"
-                        value={prevWeight}
-                        onChange={(e) => setPrevWeight(e.target.value)}
-                      />
-                      <div className="flex gap-2">
-                        <Button onClick={addPreviousEntry}>Add previous</Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </CardContent>
             </Card>
-          </div>
-        )}
 
-        {/* Settings Tab - App Settings & Account */}
-        {tab === "settings" && (
-          <div className="max-w-2xl mx-auto">
+            {/* Section 2: App Preferences */}
             <Card className="dark:bg-gray-800 dark:border-gray-700">
               <CardHeader>
-                <CardTitle>Settings</CardTitle>
+                <CardTitle>App Preferences</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Max Cap Setting */}
@@ -1665,30 +1692,202 @@ export default function DashboardPage() {
                   </Select>
                 </div>
 
-                {/* Account Actions */}
-                <div className="space-y-4 pt-4 border-t dark:border-gray-700 mt-6">
-                  <p className="text-sm font-medium text-muted-foreground">Account</p>
-                  <Button
-                    onClick={() => signOut({ callbackUrl: '/' })}
-                    variant="outline"
-                    className="w-full text-red-500 border-red-200 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-900/20"
-                  >
-                    Log out
-                  </Button>
+                {/* Previous-data setting */}
+                <div className="p-4 border rounded bg-transparent dark:bg-input/30 border-input">
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={allowPreviousData}
+                      onChange={(e) => setAllowPreviousData(e.target.checked)}
+                    />
+                    <span className="text-sm">Allow adding previous data</span>
+                  </label>
 
-                  <Button
-                    onClick={handleDeleteAccount}
-                    variant="destructive"
-                    className="w-full"
-                  >
-                    Delete Account
-                  </Button>
+                  {allowPreviousData && (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <input
+                        type="date"
+                        className="h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base dark:bg-input/30"
+                        value={prevDate}
+                        max={new Date().toISOString().slice(0, 10)}
+                        onChange={(e) => setPrevDate(e.target.value)}
+                      />
+                      <input
+                        placeholder="Weight (kg)"
+                        className="h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base dark:bg-input/30"
+                        value={prevWeight}
+                        onChange={(e) => setPrevWeight(e.target.value)}
+                      />
+                      <div className="flex gap-2">
+                        <Button onClick={addPreviousEntry}>Add previous</Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Section 3: Account Danger Zone */}
+            <Card className="dark:bg-red-900/10 border-red-200 dark:border-red-900/50">
+              <CardHeader>
+                <CardTitle className="text-red-500">Danger Zone</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">Once you delete your account, there is no going back. Please be certain.</p>
+                <Button
+                  onClick={() => signOut({ callbackUrl: '/' })}
+                  variant="outline"
+                  className="w-full text-gray-700 dark:text-gray-300"
+                >
+                  Log out
+                </Button>
+
+                <Button
+                  onClick={handleDeleteAccount}
+                  variant="destructive"
+                  className="w-full bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Delete Account
+                </Button>
               </CardContent>
             </Card>
           </div>
         )}
       </div>
+
+        {/* Mind Tab */}
+        {tab === "mind" && (
+          <div className="max-w-2xl mx-auto space-y-6">
+            {showMoodForm ? (
+              <Card className="dark:bg-gray-800 dark:border-gray-700 overflow-hidden transform transition-all duration-500">
+                <CardHeader>
+                  <CardTitle className="text-center text-2xl font-normal">How are you feeling right now?</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex justify-center gap-6">
+                    {(['sad', 'neutral', 'happy'] as const).map((mood) => {
+                      const isSelected = currentMood === mood;
+                      const Icon = mood === 'sad' ? Frown : mood === 'neutral' ? Meh : Smile;
+                      const colors = {
+                        sad: 'text-blue-500 hover:text-blue-400 bg-blue-500/10',
+                        neutral: 'text-yellow-500 hover:text-yellow-400 bg-yellow-500/10',
+                        happy: 'text-emerald-500 hover:text-emerald-400 bg-emerald-500/10'
+                      };
+                      return (
+                        <button
+                          key={mood}
+                          onClick={() => setCurrentMood(mood)}
+                          className={`
+                            p-4 rounded-full transition-all duration-300 transform
+                            ${isSelected ? 'scale-110 shadow-lg shadow-current ring-4 ring-offset-2 dark:ring-offset-gray-900 ring-current opacity-100' : 'opacity-40 hover:opacity-80 scale-100'}
+                            ${colors[mood]}
+                          `}
+                        >
+                          <Icon className="w-12 h-12" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                  
+                  <div className="space-y-2 mt-4">
+                    <textarea
+                      placeholder="Take a moment to reflect on your current state..."
+                      className="w-full min-h-[120px] p-4 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                      value={moodNotes}
+                      onChange={(e) => setMoodNotes(e.target.value)}
+                    />
+                  </div>
+                  
+                  <div className="flex justify-end pt-2">
+                    {moodHistory.some(m => m.dateISO === new Date().toISOString().slice(0, 10)) && (
+                      <Button variant="ghost" className="mr-2" onClick={() => {
+                        setShowMoodForm(false);
+                        setCurrentMood(null);
+                        setMoodNotes("");
+                      }}>Cancel</Button>
+                    )}
+                    <Button 
+                      disabled={!currentMood}
+                      className="px-8"
+                      onClick={async () => {
+                        const userId = session?.user?.id;
+                        if (!userId || !currentMood) return;
+                        const dateISO = new Date().toISOString().slice(0, 10);
+                        
+                        try {
+                          const res = await fetch('/api/mood', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId, dateISO, mood: currentMood, notes: moodNotes })
+                          });
+                          if (res.ok) {
+                            const { entry } = await res.json();
+                            setMoodHistory([entry, ...moodHistory]);
+                            setShowMoodForm(false);
+                            setCurrentMood(null);
+                            setMoodNotes("");
+                            showToast("Reflection saved successfully!", "success");
+                          } else {
+                            showToast("Failed to save reflection", "error");
+                          }
+                        } catch(e) { console.error(e); }
+                      }}
+                    >
+                      Save Reflection
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="flex justify-center mt-2 mb-6">
+                <Button 
+                  variant="outline" 
+                  className="rounded-full shadow-sm"
+                  onClick={() => setShowMoodForm(true)}
+                >
+                  + Log another reflection
+                </Button>
+              </div>
+            )}
+            
+            <Card className="dark:bg-gray-800 dark:border-gray-700">
+              <CardHeader>
+                <CardTitle>Reflections Timeline</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {moodHistory.length > 0 ? (
+                  <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-300 dark:before:via-slate-700 before:to-transparent">
+                    {moodHistory.map((entry: any, index: number) => {
+                      const timeString = new Date(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      const Icon = entry.mood === 'sad' ? Frown : entry.mood === 'neutral' ? Meh : Smile;
+                      const iconColors = {
+                        sad: 'text-blue-500 bg-blue-100 dark:bg-blue-900/50',
+                        neutral: 'text-yellow-500 bg-yellow-100 dark:bg-yellow-900/50',
+                        happy: 'text-emerald-500 bg-emerald-100 dark:bg-emerald-900/50'
+                      };
+                      return (
+                        <div key={entry._id || index} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                          <div className={`flex items-center justify-center w-10 h-10 rounded-full border border-white dark:border-gray-800 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 ${iconColors[entry.mood as keyof typeof iconColors]}`}>
+                            <Icon className="w-5 h-5" />
+                          </div>
+                          <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded border dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+                            <div className="flex items-center justify-between space-x-2 mb-1">
+                              <span className="font-bold text-gray-800 dark:text-gray-200">{entry.dateISO}</span>
+                              <span className="text-xs text-gray-500">{timeString}</span>
+                            </div>
+                            <p className="text-gray-600 dark:text-gray-400 break-words">{entry.notes || "No reflection note added."}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-center text-gray-500 dark:text-gray-400 py-8">No reflections down here yet.</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
       {/* Calories Modal */}
       {showCaloriesModal && (

@@ -3,6 +3,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import UserProfile from "@/models/UserProfile";
 import DailyLog from "@/models/DailyLog";
+import MoodLog from "@/models/MoodLog";
 import bcrypt from "bcryptjs";
 
 export async function POST(req: Request) {
@@ -17,6 +18,7 @@ export async function POST(req: Request) {
         if (existingUser) {
             // Delete logs
             await DailyLog.deleteMany({ user: existingUser._id });
+            await MoodLog.deleteMany({ user: existingUser._id });
             // Delete profile
             await UserProfile.deleteMany({ user: existingUser._id });
             // Delete user
@@ -56,6 +58,7 @@ export async function POST(req: Request) {
 
         // 4. Generate History (30 days)
         const logs = [];
+        const moodLogs = [];
         const today = new Date();
 
         // Starting weight 30 days ago
@@ -101,13 +104,52 @@ export async function POST(req: Request) {
                 weight: Number(currentSimWeight.toFixed(1)),
                 calories: cals,
                 water: water,
-                mood: 'happy',
                 sleep: 7 + Math.floor(Math.random() * 2),
             });
+
+            // Generate Mood Logs for this day (1-3 entries)
+            const numMoods = Math.floor(Math.random() * 3) + 1; // 1 to 3
+            const possibleMoods = ['sad', 'neutral', 'happy'];
+            const notesHappy = ["Feeling great today!", "Had a nice walk.", "Very productive at work.", "Relaxing evening.", "Life is good!"];
+            const notesNeutral = ["Just a regular day.", "Nothing special happened.", "Tired but okay.", "A bit bored.", "Got some chores done."];
+            const notesSad = ["Feeling a bit down.", "Stressed from work.", "Didn't sleep well.", "Rough day.", "Just want this week to end."];
+
+            for (let j = 0; j < numMoods; j++) {
+                // Determine a time for the log
+                const moodD = new Date(d);
+                if (j === 0) moodD.setHours(8 + Math.floor(Math.random() * 3)); // Morning
+                else if (j === 1) moodD.setHours(13 + Math.floor(Math.random() * 4)); // Afternoon
+                else moodD.setHours(19 + Math.floor(Math.random() * 4)); // Evening
+
+                // Weight probability (happier if streak is good)
+                let moodSelection;
+                if (i < 15) {
+                    // last 15 days (streak) - more happy
+                    moodSelection = Math.random() < 0.7 ? 'happy' : (Math.random() < 0.5 ? 'neutral' : 'sad');
+                } else {
+                    // older days - neutral/sad lean
+                    moodSelection = possibleMoods[Math.floor(Math.random() * possibleMoods.length)];
+                }
+
+                let note = "";
+                if (moodSelection === 'happy') note = notesHappy[Math.floor(Math.random() * notesHappy.length)];
+                if (moodSelection === 'neutral') note = notesNeutral[Math.floor(Math.random() * notesNeutral.length)];
+                if (moodSelection === 'sad') note = notesSad[Math.floor(Math.random() * notesSad.length)];
+
+                moodLogs.push({
+                    user: user._id,
+                    dateISO: dateStr,
+                    mood: moodSelection,
+                    notes: note,
+                    createdAt: moodD,
+                    updatedAt: moodD,
+                });
+            }
         }
 
         // Bulk insert logs
         await DailyLog.insertMany(logs);
+        await MoodLog.insertMany(moodLogs);
 
         return NextResponse.json({
             message: "Demo account seeded",
