@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Sandwich, GlassWater, X, Flame, Smile, Meh, Frown, Home, HeartPulse, Settings as SettingsIcon, Droplets, Brain, TrendingUp } from "lucide-react";
+import { Sandwich, GlassWater, X, Flame, Smile, Meh, Frown, Home, HeartPulse, Settings as SettingsIcon, Droplets, Brain, TrendingUp, Moon, ChevronUp, ChevronDown, Info, Sun, Clock } from "lucide-react";
 import OnlineIndicator from "@/components/OnlineIndicator";
 import {
   ResponsiveContainer,
@@ -49,7 +49,7 @@ export default function DashboardPage() {
 
   const [activeCategory, setActiveCategory] = useState<"home" | "health" | "settings">("home");
   const [tab, setTab] = useState<
-    "dashboard" | "history" | "settings" | "nutrition" | "data" | "mind"
+    "dashboard" | "history" | "settings" | "nutrition" | "data" | "mind" | "sleep"
   >("dashboard");
   const [userData, setUserData] = useState<UserData>({
     weight: "",
@@ -96,6 +96,9 @@ export default function DashboardPage() {
   const [showMoodForm, setShowMoodForm] = useState(true);
   const [currentMood, setCurrentMood] = useState<"sad" | "neutral" | "happy" | null>(null);
   const [moodNotes, setMoodNotes] = useState("");
+  const [wakeHour, setWakeHour] = useState<number>(7);
+  const [wakeMinute, setWakeMinute] = useState<number>(0);
+  const [sleepCalcMode, setSleepCalcMode] = useState<"wake" | "bed">("wake");
   const toastTimer = useRef<number | null>(null);
 
   const normalizeHistory = (raw: any[]): HistoryEntry[] => {
@@ -871,6 +874,16 @@ export default function DashboardPage() {
               <Brain className="w-4 h-4" /> Mind
             </button>
             <button
+              onClick={() => setTab("sleep")}
+              className={`px-5 py-2 rounded-full flex items-center gap-2 font-medium transition-all duration-300 ${
+                tab === "sleep" 
+                  ? "bg-indigo-500/10 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400 ring-2 ring-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.3)]" 
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200"
+              }`}
+            >
+              <Moon className="w-4 h-4" /> Sleep
+            </button>
+            <button
               onClick={() => setTab("history")}
               className={`px-5 py-2 rounded-full flex items-center gap-2 font-medium transition-all duration-300 ${
                 tab === "history" 
@@ -1499,6 +1512,120 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Sleep Tab */}
+        {tab === "sleep" && (
+          <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in duration-500 pb-24">
+            
+            {/* Mode Toggle */}
+            <div className="flex justify-center mb-4">
+              <div className="bg-gray-100/80 dark:bg-gray-800/80 p-1.5 rounded-full flex shadow-inner backdrop-blur-sm border dark:border-gray-700">
+                <button 
+                  onClick={() => setSleepCalcMode("wake")} 
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-medium transition-all duration-300 ${sleepCalcMode === "wake" ? "bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"}`}
+                >
+                  <Sun className="w-4 h-4" /> I need to wake up at
+                </button>
+                <button 
+                  onClick={() => setSleepCalcMode("bed")} 
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-medium transition-all duration-300 ${sleepCalcMode === "bed" ? "bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"}`}
+                >
+                  <Moon className="w-4 h-4" /> I am going to sleep at
+                </button>
+              </div>
+            </div>
+
+            <Card className="dark:bg-gray-800/80 backdrop-blur-xl border-indigo-100 dark:border-indigo-900 shadow-xl overflow-hidden relative">
+              <div className="absolute top-0 right-0 p-32 bg-indigo-500 opacity-[0.03] dark:opacity-10 blur-3xl rounded-full pointer-events-none" />
+              <CardHeader className="relative z-10 pb-0 flex flex-col items-center">
+                <CardTitle className="text-center text-3xl font-light text-indigo-950 dark:text-indigo-100">
+                  {sleepCalcMode === "wake" ? "When do you need to wake up?" : "When are you going to sleep?"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-8 relative z-10 flex flex-col items-center pt-8">
+                {/* Custom Digital Timer */}
+                <div className="flex items-center justify-center space-x-6 text-7xl font-light tabular-nums tracking-tighter text-indigo-950 dark:text-indigo-50">
+                  <div className="flex flex-col items-center group">
+                    <button onClick={() => setWakeHour(h => (h + 1) % 24)} className="p-3 opacity-0 group-hover:opacity-100 transition-all text-indigo-400 hover:text-indigo-600 hover:-translate-y-1 focused:opacity-100 focus:outline-none"><ChevronUp className="w-10 h-10" /></button>
+                    <div className="bg-white/50 dark:bg-black/20 w-32 h-32 flex items-center justify-center rounded-3xl shadow-inner border border-indigo-100 dark:border-indigo-800 backdrop-blur-sm shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)] select-none">
+                      {String(wakeHour).padStart(2, '0')}
+                    </div>
+                    <button onClick={() => setWakeHour(h => (h - 1 + 24) % 24)} className="p-3 opacity-0 group-hover:opacity-100 transition-all text-indigo-400 hover:text-indigo-600 hover:translate-y-1 focused:opacity-100 focus:outline-none"><ChevronDown className="w-10 h-10" /></button>
+                  </div>
+                  <div className="text-indigo-300 dark:text-indigo-700 animate-pulse font-medium">:</div>
+                  <div className="flex flex-col items-center group">
+                    <button onClick={() => setWakeMinute(m => (m + 5) % 60)} className="p-3 opacity-0 group-hover:opacity-100 transition-all text-indigo-400 hover:text-indigo-600 hover:-translate-y-1 focused:opacity-100 focus:outline-none"><ChevronUp className="w-10 h-10" /></button>
+                    <div className="bg-white/50 dark:bg-black/20 w-32 h-32 flex items-center justify-center rounded-3xl shadow-inner border border-indigo-100 dark:border-indigo-800 backdrop-blur-sm shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)] select-none">
+                      {String(wakeMinute).padStart(2, '0')}
+                    </div>
+                    <button onClick={() => setWakeMinute(m => (m - 5 + 60) % 60)} className="p-3 opacity-0 group-hover:opacity-100 transition-all text-indigo-400 hover:text-indigo-600 hover:translate-y-1 focused:opacity-100 focus:outline-none"><ChevronDown className="w-10 h-10" /></button>
+                  </div>
+                </div>
+                
+                {sleepCalcMode === "bed" && (
+                  <Button 
+                    variant="outline" 
+                    className="rounded-full border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/40"
+                    onClick={() => {
+                      const now = new Date();
+                      setWakeHour(now.getHours());
+                      setWakeMinute(now.getMinutes());
+                    }}
+                  >
+                    <Clock className="w-4 h-4 mr-2" /> Set to NOW
+                  </Button>
+                )}
+
+                <div className="flex items-center gap-3 text-sm text-indigo-600/80 dark:text-indigo-300/80 bg-indigo-50/80 dark:bg-indigo-900/30 px-5 py-3 rounded-2xl max-w-sm text-center leading-relaxed">
+                  <Info className="w-5 h-5 shrink-0" />
+                  <p>Our calculations include a built-in <strong>15 minute</strong> physical buffer required for an average human to fall into REM latency.</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="space-y-6 pt-4 animate-in slide-in-from-bottom-4 duration-700">
+              <h3 className="text-xl font-medium text-center text-gray-600 dark:text-gray-300">
+                {sleepCalcMode === "wake" ? "To wake up refreshed, head to bed at:" : "If you sleep then, optimal wake times are:"}
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {(sleepCalcMode === "wake" ? [6, 5, 4] : [4, 5, 6]).map(cycles => {
+                  const totalBase = wakeHour * 60 + wakeMinute;
+                  const totalCycleMins = cycles * 90 + 15;
+                  
+                  let calculatedTotal = 0;
+                  if (sleepCalcMode === "wake") {
+                    calculatedTotal = totalBase - totalCycleMins;
+                    while (calculatedTotal < 0) calculatedTotal += 24 * 60;
+                  } else {
+                    calculatedTotal = totalBase + totalCycleMins;
+                  }
+                  
+                  const calcH = Math.floor(calculatedTotal / 60) % 24;
+                  const calcM = calculatedTotal % 60;
+                  const timeStr = `${String(calcH).padStart(2, '0')}:${String(calcM).padStart(2, '0')}`;
+                  
+                  const isOptimal = cycles === 5 || cycles === 6;
+                  
+                  return (
+                    <Card key={cycles} className={`relative overflow-hidden transition-all duration-500 hover:-translate-y-1 group ${isOptimal ? 'border-indigo-200 dark:border-indigo-800 shadow-[0_10px_40px_-15px_rgba(99,102,241,0.4)] bg-gradient-to-br from-indigo-50/80 to-white dark:from-indigo-900/30 dark:to-gray-800/90' : 'opacity-80 hover:opacity-100 border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-800/50'}`}>
+                      {isOptimal && <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-indigo-400 to-indigo-600" />}
+                      <CardContent className="p-8 text-center space-y-3">
+                        {isOptimal ? (
+                          <div className="text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-widest mb-2 flex items-center justify-center gap-1">✨ Optimal</div>
+                        ) : (
+                          <div className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">Minimum</div>
+                        )}
+                        <div className={`text-5xl font-light tracking-tight transition-transform group-hover:scale-110 ${isOptimal ? 'text-indigo-950 dark:text-indigo-50' : 'text-gray-800 dark:text-gray-200'}`}>{timeStr}</div>
+                        <div className="text-sm font-medium opacity-75">{cycles} cycles</div>
+                        <div className="text-xs opacity-50 bg-black/5 dark:bg-white/5 inline-block px-3 py-1 rounded-full">{cycles * 1.5} hrs sleep</div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Settings Tab - Combined Profile & App Settings */}
