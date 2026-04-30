@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Sandwich, GlassWater, X, Flame, Smile, Meh, Frown, Home, HeartPulse, Settings as SettingsIcon, Droplets, Brain, TrendingUp, Moon, ChevronUp, ChevronDown, Info, Sun, Clock } from "lucide-react";
+import { Sandwich, GlassWater, X, Flame, Smile, Meh, Frown, Home, HeartPulse, Settings as SettingsIcon, Droplets, Brain, TrendingUp, Moon, ChevronUp, ChevronDown, Info, Sun, Clock, Wind, Play, Square } from "lucide-react";
 import OnlineIndicator from "@/components/OnlineIndicator";
 import {
   ResponsiveContainer,
@@ -49,7 +49,7 @@ export default function DashboardPage() {
 
   const [activeCategory, setActiveCategory] = useState<"home" | "health" | "settings">("home");
   const [tab, setTab] = useState<
-    "dashboard" | "history" | "settings" | "nutrition" | "data" | "mind" | "sleep"
+    "dashboard" | "history" | "settings" | "nutrition" | "data" | "mind" | "sleep" | "breathe"
   >("dashboard");
   const [userData, setUserData] = useState<UserData>({
     weight: "",
@@ -100,6 +100,81 @@ export default function DashboardPage() {
   const [wakeMinute, setWakeMinute] = useState<number>(0);
   const [sleepCalcMode, setSleepCalcMode] = useState<"wake" | "bed">("wake");
   const toastTimer = useRef<number | null>(null);
+
+  // Breathing Assistant State
+  const [breatheMode, setBreatheMode] = useState<"box" | "relax">("box");
+  const [breatheActive, setBreatheActive] = useState(false);
+  const [breathePhase, setBreathePhase] = useState<"idle" | "inhale" | "hold1" | "exhale" | "hold2">("idle");
+  const [breatheTimeLeft, setBreatheTimeLeft] = useState(0);
+  const [breatheOrbScale, setBreatheOrbScale] = useState(1);
+
+  // Breathing Assistant Engine
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    
+    if (breatheActive) {
+      if (breatheTimeLeft > 0) {
+        timer = setTimeout(() => {
+          setBreatheTimeLeft(prev => prev - 1);
+        }, 1000);
+      } else {
+        if (breatheMode === "box") {
+          // Box Breathing: 4-4-4-4
+          switch(breathePhase) {
+            case "idle":
+            case "hold2":
+              setBreathePhase("inhale");
+              setBreatheTimeLeft(4);
+              setBreatheOrbScale(1.8);
+              break;
+            case "inhale":
+              setBreathePhase("hold1");
+              setBreatheTimeLeft(4);
+              break;
+            case "hold1":
+              setBreathePhase("exhale");
+              setBreatheTimeLeft(4);
+              setBreatheOrbScale(1);
+              break;
+            case "exhale":
+              setBreathePhase("hold2");
+              setBreatheTimeLeft(4);
+              break;
+          }
+        } else {
+          // 4-7-8 Breathing
+          switch(breathePhase) {
+            case "idle":
+            case "exhale":
+              setBreathePhase("inhale");
+              setBreatheTimeLeft(4);
+              setBreatheOrbScale(1.8);
+              break;
+            case "inhale":
+              setBreathePhase("hold1");
+              setBreatheTimeLeft(7);
+              break;
+            case "hold1":
+              setBreathePhase("exhale");
+              setBreatheTimeLeft(8);
+              setBreatheOrbScale(1);
+              break;
+            case "hold2": // fallback
+              setBreathePhase("inhale");
+              setBreatheTimeLeft(4);
+              setBreatheOrbScale(1.8);
+              break;
+          }
+        }
+      }
+    } else {
+      setBreathePhase("idle");
+      setBreatheTimeLeft(0);
+      setBreatheOrbScale(1);
+    }
+    
+    return () => clearTimeout(timer);
+  }, [breatheActive, breatheTimeLeft, breathePhase, breatheMode]);
 
   const normalizeHistory = (raw: any[]): HistoryEntry[] => {
     return raw
@@ -884,6 +959,16 @@ export default function DashboardPage() {
               <Moon className="w-4 h-4" /> Sleep
             </button>
             <button
+              onClick={() => setTab("breathe")}
+              className={`px-5 py-2 rounded-full flex items-center gap-2 font-medium transition-all duration-300 ${
+                tab === "breathe" 
+                  ? "bg-cyan-500/10 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-400 ring-2 ring-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)]" 
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200"
+              }`}
+            >
+              <Wind className="w-4 h-4" /> Breathe
+            </button>
+            <button
               onClick={() => setTab("history")}
               className={`px-5 py-2 rounded-full flex items-center gap-2 font-medium transition-all duration-300 ${
                 tab === "history" 
@@ -1625,6 +1710,104 @@ export default function DashboardPage() {
                 })}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Breathe Tab */}
+        {tab === "breathe" && (
+          <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in duration-500 pb-24">
+            
+            {/* Mode Toggle */}
+            <div className="flex justify-center mb-4">
+              <div className="bg-gray-100/80 dark:bg-gray-800/80 p-1.5 rounded-full flex shadow-inner backdrop-blur-sm border dark:border-gray-700">
+                <button 
+                  onClick={() => { setBreatheMode("box"); setBreatheActive(false); setBreathePhase("idle"); setBreatheOrbScale(1); }} 
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-medium transition-all duration-300 ${breatheMode === "box" ? "bg-white dark:bg-gray-700 text-cyan-600 dark:text-cyan-400 shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"}`}
+                >
+                  Box Breathing (Focus)
+                </button>
+                <button 
+                  onClick={() => { setBreatheMode("relax"); setBreatheActive(false); setBreathePhase("idle"); setBreatheOrbScale(1); }} 
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-medium transition-all duration-300 ${breatheMode === "relax" ? "bg-white dark:bg-gray-700 text-cyan-600 dark:text-cyan-400 shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"}`}
+                >
+                  4-7-8 Technique (Relax)
+                </button>
+              </div>
+            </div>
+
+            <Card className="dark:bg-gray-800/80 backdrop-blur-xl border-cyan-100 dark:border-cyan-900 shadow-2xl overflow-hidden relative min-h-[500px] flex flex-col justify-center items-center">
+              <div className="absolute top-0 right-0 p-32 bg-cyan-500 opacity-[0.03] dark:opacity-10 blur-3xl rounded-full pointer-events-none" />
+              <div className="absolute bottom-0 left-0 p-32 bg-teal-500 opacity-[0.03] dark:opacity-10 blur-3xl rounded-full pointer-events-none" />
+              
+              <CardContent className="relative z-10 flex flex-col items-center justify-center p-8 w-full h-full">
+                
+                <h3 className="text-2xl font-light text-cyan-950 dark:text-cyan-50 mb-12 h-8 transition-all duration-500 uppercase tracking-widest text-center">
+                  {!breatheActive ? "Focus on your breath" : breathePhase === "hold1" || breathePhase === "hold2" ? "Hold" : breathePhase}
+                </h3>
+
+                {/* The Breathe Orb */}
+                <div className="relative flex items-center justify-center w-64 h-64 mb-16">
+                  <div 
+                    className={`absolute inset-0 bg-gradient-to-tr from-cyan-400 to-teal-300 rounded-full blur-2xl opacity-20 transition-all ${breatheActive && breathePhase === 'inhale' ? 'opacity-50 blur-3xl' : ''}`}
+                    style={{ 
+                      transform: `scale(${breatheOrbScale})`,
+                      transitionDuration: breatheActive && breathePhase === "inhale" ? "4000ms" : breatheActive && breathePhase === "exhale" ? (breatheMode === "box" ? "4000ms" : "8000ms") : "300ms",
+                      transitionTimingFunction: "ease-in-out" 
+                    }}
+                  />
+                  <div 
+                    className={`relative z-10 w-48 h-48 rounded-full shadow-[0_0_60px_rgba(6,182,212,0.4)] flex items-center justify-center border border-white/30 dark:border-cyan-400/30 overflow-hidden transition-all bg-black/40 backdrop-blur-md`}
+                    style={{ 
+                      transform: `scale(${breatheOrbScale})`,
+                      transitionDuration: breatheActive && breathePhase === "inhale" ? "4000ms" : breatheActive && breathePhase === "exhale" ? (breatheMode === "box" ? "4000ms" : "8000ms") : "300ms",
+                      transitionTimingFunction: "ease-in-out"
+                    }}
+                  >
+                    {/* Siri/Cortana Fluid Mesh Blobs */}
+                    <div className={`absolute w-20 h-20 bg-cyan-400 rounded-full mix-blend-screen filter blur-xl opacity-80 transition-all duration-700 ease-in-out ${breatheActive ? 'animate-[spin_10s_linear_infinite] scale-150' : 'scale-100'}`} style={{ top: '-5%', left: '-5%', transformOrigin: 'center right' }}></div>
+                    <div className={`absolute w-20 h-20 bg-indigo-500 rounded-full mix-blend-screen filter blur-xl opacity-80 transition-all duration-700 ease-in-out ${breatheActive ? 'animate-[spin_14s_linear_infinite_reverse] scale-150' : 'scale-100'}`} style={{ bottom: '-5%', right: '-5%', transformOrigin: 'center left' }}></div>
+                    <div className={`absolute w-20 h-20 bg-fuchsia-500 rounded-full mix-blend-screen filter blur-xl opacity-60 transition-all duration-700 ease-in-out ${breatheActive ? 'animate-[spin_12s_linear_infinite] scale-125' : 'scale-100'}`} style={{ top: '30%', left: '30%', transformOrigin: 'bottom right' }}></div>
+
+                    {/* Central Dark Core to make text readable and create an empty ring look */}
+                    <div className="absolute inset-5 rounded-full bg-black/60 backdrop-blur-sm z-0 shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]"></div>
+
+                    <div className="relative z-10 text-6xl font-light text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.8)] tracking-tighter">
+                      {breatheActive && breatheTimeLeft > 0 ? breatheTimeLeft : ""}
+                    </div>
+                  </div>
+                </div>
+
+                <Button 
+                  size="lg"
+                  onClick={() => {
+                    if (breatheActive) {
+                      setBreatheActive(false);
+                      setBreathePhase("idle");
+                      setBreatheTimeLeft(0);
+                      setBreatheOrbScale(1);
+                    } else {
+                      setBreatheActive(true);
+                    }
+                  }}
+                  className={`rounded-full px-8 py-6 text-lg shadow-lg transition-all duration-300 ${breatheActive ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-200 dark:border-red-900/50' : 'bg-cyan-600 hover:bg-cyan-700 text-white'}`}
+                  variant={breatheActive ? "outline" : "default"}
+                >
+                  {breatheActive ? (
+                    <><Square className="w-5 h-5 mr-2" /> Stop Session</>
+                  ) : (
+                    <><Play className="w-5 h-5 mr-2" /> Start Breathing</>
+                  )}
+                </Button>
+
+                <div className="flex items-center gap-3 text-sm text-cyan-700 dark:text-cyan-200/80 bg-cyan-50/80 dark:bg-cyan-900/30 px-5 py-4 rounded-2xl max-w-md text-center leading-relaxed mt-10">
+                  <Info className="w-6 h-6 shrink-0 text-cyan-600 dark:text-cyan-400" />
+                  <p className="text-left">
+                    Follow the visual expansion of the orb to pace your breath. 
+                    <strong> Box Breathing</strong> helps regain focus and clarity, while the <strong>4-7-8 Technique</strong> acts as a natural tranquiliser for your nervous system to help you sleep.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
