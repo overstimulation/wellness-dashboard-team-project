@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Sandwich, GlassWater, X, Flame, Smile, Meh, Frown, Home, HeartPulse, Settings as SettingsIcon, Droplets, Brain, TrendingUp, Moon, ChevronUp, ChevronDown, Info, Sun, Clock, Wind, Play, Square, Scale, Gamepad2, ArrowLeft, Circle, Timer } from "lucide-react";
+import { Sandwich, GlassWater, X, Flame, Smile, Meh, Frown, Home, HeartPulse, Settings as SettingsIcon, Droplets, Brain, TrendingUp, Moon, ChevronUp, ChevronDown, Info, Sun, Clock, Wind, Play, Square, Scale, Gamepad2, ArrowLeft, Circle, Timer, LayoutGrid } from "lucide-react";
 import OnlineIndicator from "@/components/OnlineIndicator";
 import {
   ResponsiveContainer,
@@ -26,6 +26,7 @@ import MemoryGame from "@/components/games/MemoryGame";
 import TwentyFortyEightGame from "@/components/games/TwentyFortyEightGame";
 import PopItComponent from "@/components/relax/PopItComponent";
 import PomodoroComponent from "@/components/relax/PomodoroComponent";
+import EisenhowerComponent from "@/components/productivity/EisenhowerComponent";
 
 // Typy dla danych użytkownika
 interface UserData {
@@ -56,7 +57,7 @@ export default function DashboardPage() {
 
   const [activeCategory, setActiveCategory] = useState<"home" | "health" | "settings">("home");
   const [tab, setTab] = useState<
-    "dashboard" | "history" | "settings" | "nutrition" | "data" | "mind" | "sleep" | "breathe" | "games" | "popit" | "pomodoro"
+    "dashboard" | "history" | "settings" | "nutrition" | "data" | "mind" | "sleep" | "breathe" | "games" | "popit" | "pomodoro" | "eisenhower"
   >("dashboard");
   const [activeGame, setActiveGame] = useState<"snake" | "memory" | "2048" | null>(null);
   const [userData, setUserData] = useState<UserData>({
@@ -1088,6 +1089,16 @@ export default function DashboardPage() {
               <Timer className="w-4 h-4" /> Pomodoro
             </button>
             <button
+              onClick={() => setTab("eisenhower")}
+              className={`px-5 py-2 rounded-full flex items-center gap-2 font-medium transition-all duration-300 ${
+                tab === "eisenhower" 
+                  ? "bg-amber-500/10 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400 ring-2 ring-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]" 
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200"
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4" /> Eisenhower
+            </button>
+            <button
               onClick={() => setTab("history")}
               className={`px-5 py-2 rounded-full flex items-center gap-2 font-medium transition-all duration-300 ${
                 tab === "history" 
@@ -2101,6 +2112,13 @@ export default function DashboardPage() {
         {tab === "pomodoro" && (
           <div className="max-w-4xl mx-auto space-y-8 pb-24">
             <PomodoroComponent />
+          </div>
+        )}
+
+        {/* Eisenhower Tab */}
+        {tab === "eisenhower" && session?.user?.id && (
+          <div className="max-w-4xl mx-auto space-y-8 pb-24">
+            <EisenhowerComponent userId={session.user.id} />
           </div>
         )}
 

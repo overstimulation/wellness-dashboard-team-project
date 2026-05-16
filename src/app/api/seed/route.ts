@@ -4,6 +4,7 @@ import User from "@/models/User";
 import UserProfile from "@/models/UserProfile";
 import DailyLog from "@/models/DailyLog";
 import MoodLog from "@/models/MoodLog";
+import EisenhowerTask from "@/models/EisenhowerTask";
 import bcrypt from "bcryptjs";
 
 export async function POST(req: Request) {
@@ -21,6 +22,8 @@ export async function POST(req: Request) {
             await MoodLog.deleteMany({ user: existingUser._id });
             // Delete profile
             await UserProfile.deleteMany({ user: existingUser._id });
+            // Delete eisenhower tasks
+            await EisenhowerTask.deleteMany({ user: existingUser._id });
             // Delete user
             await User.deleteOne({ _id: existingUser._id });
         }
@@ -150,6 +153,19 @@ export async function POST(req: Request) {
         // Bulk insert logs
         await DailyLog.insertMany(logs);
         await MoodLog.insertMany(moodLogs);
+
+        // 5. Generate Eisenhower Tasks (asymmetric distribution: 3x Q1, 2x Q2, 2x Q3, 1x Q4)
+        const eisenhowerTasks = [
+            { user: user._id, title: "Finish presentation for Monday", quadrant: "q1", isCompleted: false },
+            { user: user._id, title: "Pay electricity bill", quadrant: "q1", isCompleted: false },
+            { user: user._id, title: "Reply to manager's urgent email", quadrant: "q1", isCompleted: true },
+            { user: user._id, title: "Plan gym workout schedule", quadrant: "q2", isCompleted: false },
+            { user: user._id, title: "Read the new tech blog post", quadrant: "q2", isCompleted: false },
+            { user: user._id, title: "Answer random Slack messages", quadrant: "q3", isCompleted: false },
+            { user: user._id, title: "Book a table for team lunch", quadrant: "q3", isCompleted: false },
+            { user: user._id, title: "Scroll through social media", quadrant: "q4", isCompleted: false },
+        ];
+        await EisenhowerTask.insertMany(eisenhowerTasks);
 
         return NextResponse.json({
             message: "Demo account seeded",
