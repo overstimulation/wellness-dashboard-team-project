@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Sandwich, GlassWater, X, Flame, Smile, Meh, Frown, Home, HeartPulse, Settings as SettingsIcon, Droplets, Brain, TrendingUp, Moon, ChevronUp, ChevronDown, Info, Sun, Clock, Wind, Play, Square, Scale } from "lucide-react";
+import { Sandwich, GlassWater, X, Flame, Smile, Meh, Frown, Home, HeartPulse, Settings as SettingsIcon, Droplets, Brain, TrendingUp, Moon, ChevronUp, ChevronDown, Info, Sun, Clock, Wind, Play, Square, Scale, Gamepad2, ArrowLeft } from "lucide-react";
 import OnlineIndicator from "@/components/OnlineIndicator";
 import {
   ResponsiveContainer,
@@ -21,6 +21,9 @@ import {
   Tooltip,
   CartesianGrid,
 } from "recharts";
+import SnakeGame from "@/components/games/SnakeGame";
+import MemoryGame from "@/components/games/MemoryGame";
+import TwentyFortyEightGame from "@/components/games/TwentyFortyEightGame";
 
 // Typy dla danych użytkownika
 interface UserData {
@@ -51,8 +54,9 @@ export default function DashboardPage() {
 
   const [activeCategory, setActiveCategory] = useState<"home" | "health" | "settings">("home");
   const [tab, setTab] = useState<
-    "dashboard" | "history" | "settings" | "nutrition" | "data" | "mind" | "sleep" | "breathe"
+    "dashboard" | "history" | "settings" | "nutrition" | "data" | "mind" | "sleep" | "breathe" | "games"
   >("dashboard");
+  const [activeGame, setActiveGame] = useState<"snake" | "memory" | "2048" | null>(null);
   const [userData, setUserData] = useState<UserData>({
     weight: "",
     height: "",
@@ -1052,6 +1056,16 @@ export default function DashboardPage() {
               <Wind className="w-4 h-4" /> Breathe
             </button>
             <button
+              onClick={() => setTab("games")}
+              className={`px-5 py-2 rounded-full flex items-center gap-2 font-medium transition-all duration-300 ${
+                tab === "games" 
+                  ? "bg-orange-500/10 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400 ring-2 ring-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]" 
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200"
+              }`}
+            >
+              <Gamepad2 className="w-4 h-4" /> Games
+            </button>
+            <button
               onClick={() => setTab("history")}
               className={`px-5 py-2 rounded-full flex items-center gap-2 font-medium transition-all duration-300 ${
                 tab === "history" 
@@ -1977,6 +1991,80 @@ export default function DashboardPage() {
                 </div>
               </CardContent>
             </Card>
+          </div>
+        )}
+
+        {/* Games Tab */}
+        {tab === "games" && (
+          <div className="max-w-4xl mx-auto space-y-8 pb-24">
+            {!activeGame ? (
+              <>
+                <div className="flex items-center gap-3 text-sm text-orange-700 dark:text-orange-200/80 bg-orange-50/80 dark:bg-orange-900/30 px-5 py-4 rounded-2xl mb-8 leading-relaxed">
+                  <Info className="w-6 h-6 shrink-0 text-orange-600 dark:text-orange-400" />
+                  <p>
+                    Taking short, active breaks to play simple games gives your brain a chance to reset. It helps reduce stress, improves your daily focus, and keeps your mind sharp.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Snake Cartridge */}
+                  <div 
+                    onClick={() => setActiveGame("snake")}
+                    className="group cursor-pointer bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-900/50 hover:border-orange-500 dark:hover:border-orange-500 rounded-2xl p-6 shadow-sm hover:shadow-[0_0_20px_rgba(249,115,22,0.15)] transition-all duration-300 transform hover:-translate-y-1"
+                  >
+                    <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/40 rounded-2xl flex items-center justify-center mb-4 text-3xl group-hover:scale-110 transition-transform">
+                      🐍
+                    </div>
+                    <h3 className="text-xl font-bold mb-2">Healthy Snake</h3>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                      Classic snake, but you grow by eating healthy food. A fast-paced reflex test.
+                    </p>
+                  </div>
+
+                  {/* Memory Cartridge */}
+                  <div 
+                    onClick={() => setActiveGame("memory")}
+                    className="group cursor-pointer bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-900/50 hover:border-orange-500 dark:hover:border-orange-500 rounded-2xl p-6 shadow-sm hover:shadow-[0_0_20px_rgba(249,115,22,0.15)] transition-all duration-300 transform hover:-translate-y-1"
+                  >
+                    <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/40 rounded-2xl flex items-center justify-center mb-4 text-3xl group-hover:scale-110 transition-transform">
+                      🧠
+                    </div>
+                    <h3 className="text-xl font-bold mb-2">Memory Match</h3>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                      Find matching wellness emojis to test and train your short-term memory.
+                    </p>
+                  </div>
+
+                  {/* 2048 Cartridge */}
+                  <div 
+                    onClick={() => setActiveGame("2048")}
+                    className="group cursor-pointer bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-900/50 hover:border-orange-500 dark:hover:border-orange-500 rounded-2xl p-6 shadow-sm hover:shadow-[0_0_20px_rgba(249,115,22,0.15)] transition-all duration-300 transform hover:-translate-y-1"
+                  >
+                    <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/40 rounded-2xl flex items-center justify-center mb-4 text-3xl group-hover:scale-110 transition-transform">
+                      🌍
+                    </div>
+                    <h3 className="text-xl font-bold mb-2">Emoji 2048</h3>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                      Swipe to merge seeds into trees. A relaxing puzzle that requires spatial thinking.
+                    </p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-6">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setActiveGame(null)}
+                  className="mb-4 text-gray-500 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" /> Back to Games
+                </Button>
+                
+                {activeGame === "snake" && <SnakeGame />}
+                {activeGame === "memory" && <MemoryGame />}
+                {activeGame === "2048" && <TwentyFortyEightGame />}
+              </div>
+            )}
           </div>
         )}
 
