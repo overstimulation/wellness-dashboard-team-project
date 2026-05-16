@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Sandwich, GlassWater, X, Flame, Smile, Meh, Frown, Home, HeartPulse, Settings as SettingsIcon, Droplets, Brain, TrendingUp, Moon, ChevronUp, ChevronDown, Info, Sun, Clock, Wind, Play, Square, Scale, Gamepad2, ArrowLeft } from "lucide-react";
+import { Sandwich, GlassWater, X, Flame, Smile, Meh, Frown, Home, HeartPulse, Settings as SettingsIcon, Droplets, Brain, TrendingUp, Moon, ChevronUp, ChevronDown, Info, Sun, Clock, Wind, Play, Square, Scale, Gamepad2, ArrowLeft, Circle } from "lucide-react";
 import OnlineIndicator from "@/components/OnlineIndicator";
 import {
   ResponsiveContainer,
@@ -24,6 +24,7 @@ import {
 import SnakeGame from "@/components/games/SnakeGame";
 import MemoryGame from "@/components/games/MemoryGame";
 import TwentyFortyEightGame from "@/components/games/TwentyFortyEightGame";
+import PopItComponent from "@/components/relax/PopItComponent";
 
 // Typy dla danych użytkownika
 interface UserData {
@@ -54,7 +55,7 @@ export default function DashboardPage() {
 
   const [activeCategory, setActiveCategory] = useState<"home" | "health" | "settings">("home");
   const [tab, setTab] = useState<
-    "dashboard" | "history" | "settings" | "nutrition" | "data" | "mind" | "sleep" | "breathe" | "games"
+    "dashboard" | "history" | "settings" | "nutrition" | "data" | "mind" | "sleep" | "breathe" | "games" | "popit"
   >("dashboard");
   const [activeGame, setActiveGame] = useState<"snake" | "memory" | "2048" | null>(null);
   const [userData, setUserData] = useState<UserData>({
@@ -1066,6 +1067,16 @@ export default function DashboardPage() {
               <Gamepad2 className="w-4 h-4" /> Games
             </button>
             <button
+              onClick={() => setTab("popit")}
+              className={`px-5 py-2 rounded-full flex items-center gap-2 font-medium transition-all duration-300 ${
+                tab === "popit" 
+                  ? "bg-pink-500/10 text-pink-600 dark:bg-pink-900/40 dark:text-pink-400 ring-2 ring-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.3)]" 
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200"
+              }`}
+            >
+              <Circle className="w-4 h-4" /> Pop-it
+            </button>
+            <button
               onClick={() => setTab("history")}
               className={`px-5 py-2 rounded-full flex items-center gap-2 font-medium transition-all duration-300 ${
                 tab === "history" 
@@ -2065,6 +2076,13 @@ export default function DashboardPage() {
                 {activeGame === "2048" && <TwentyFortyEightGame />}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Pop-it Tab */}
+        {tab === "popit" && (
+          <div className="max-w-4xl mx-auto space-y-8 pb-24">
+            <PopItComponent />
           </div>
         )}
 
