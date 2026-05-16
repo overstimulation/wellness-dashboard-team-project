@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -8,12 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Sandwich, GlassWater, X, Flame, Smile, Meh, Frown, Home, HeartPulse, Settings as SettingsIcon, Droplets, Brain, TrendingUp, Moon, ChevronUp, ChevronDown, Info, Sun, Clock, Wind, Play, Square } from "lucide-react";
+import { Sandwich, GlassWater, X, Flame, Smile, Meh, Frown, Home, HeartPulse, Settings as SettingsIcon, Droplets, Brain, TrendingUp, Moon, ChevronUp, ChevronDown, Info, Sun, Clock, Wind, Play, Square, Scale } from "lucide-react";
 import OnlineIndicator from "@/components/OnlineIndicator";
 import {
   ResponsiveContainer,
   LineChart,
   Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
@@ -100,6 +102,13 @@ export default function DashboardPage() {
   const [wakeMinute, setWakeMinute] = useState<number>(0);
   const [sleepCalcMode, setSleepCalcMode] = useState<"wake" | "bed">("wake");
   const toastTimer = useRef<number | null>(null);
+  const moodScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (tab === "dashboard" && moodScrollRef.current) {
+      moodScrollRef.current.scrollLeft = moodScrollRef.current.scrollWidth;
+    }
+  }, [tab, moodHistory.length]);
 
   // Breathing Assistant State
   const [breatheMode, setBreatheMode] = useState<"box" | "relax">("box");
@@ -869,6 +878,80 @@ export default function DashboardPage() {
     { name: "Energy drink", ml: 330, icon: "/icons/drinks/energy-drink.png" },
   ];
 
+  // Mood Analytics Data Processing
+  const moodChartData = [...moodHistory]
+    .sort((a, b) => new Date(a.dateISO).getTime() - new Date(b.dateISO).getTime())
+    .map(entry => {
+      let value = 2; // neutral
+      if (entry.mood === "sad") value = 1;
+      if (entry.mood === "happy") value = 3;
+      return {
+        date: entry.dateISO,
+        value,
+        notes: entry.notes || "",
+        originalMood: entry.mood
+      }
+    });
+
+  const getMoodInsight = () => {
+    if (moodChartData.length === 0) return "Not enough data yet. Start tracking your mood to see insights!";
+    const sum = moodChartData.reduce((acc, curr) => acc + curr.value, 0);
+    const avg = sum / moodChartData.length;
+    
+    if (avg >= 2.5) return `You have recorded ${moodChartData.length} days of data. Your average mood is overwhelmingly positive! Keep riding this wave.`;
+    if (avg >= 1.5) return `You have recorded ${moodChartData.length} days of data. Your mood has been fairly balanced. Remember to take time for yourself.`;
+    return `You have recorded ${moodChartData.length} days of data. It looks like you've had a tough time lately. Don't hesitate to reach out for support or take a break.`;
+  };
+
+  const renderMoodTick = (tickProps: any) => {
+    const { x, y, payload } = tickProps;
+    let emoji = "😐";
+    if (payload.value === 1) emoji = "😢";
+    if (payload.value === 3) emoji = "😃";
+    
+    return (
+      <text x={x} y={y} dy={5} textAnchor="end" fill="#666" fontSize={20}>
+        {emoji}
+      </text>
+    );
+  };
+
+  const CustomEmojiDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    let emoji = "😐";
+    if (payload.value === 1) emoji = "😢";
+    if (payload.value === 3) emoji = "😃";
+    
+    return (
+      <text x={cx} y={cy} dy={8} textAnchor="middle" fontSize={24} className="drop-shadow-sm">
+        {emoji}
+      </text>
+    );
+  };
+
+  const CustomMoodTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      let emoji = "😐";
+      let color = "text-yellow-500";
+      if (data.value === 1) { emoji = "😢"; color = "text-red-500"; }
+      if (data.value === 3) { emoji = "😃"; color = "text-green-500"; }
+
+      return (
+        <div className="bg-white dark:bg-gray-800 border dark:border-gray-700 p-3 rounded-lg shadow-lg">
+          <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">{label}</p>
+          <p className={`text-lg font-bold flex items-center gap-2 ${color}`}>
+            <span>{emoji}</span> <span className="capitalize">{data.originalMood}</span>
+          </p>
+          {data.notes && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 italic max-w-[200px] break-words">"{data.notes}"</p>
+          )}
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <main className="min-h-screen p-8 transition-colors duration-300 bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-white">
       <OnlineIndicator />
@@ -1113,8 +1196,10 @@ export default function DashboardPage() {
 
             {/* Recent History */}
             <Card className="md:col-span-2 dark:bg-gray-800 dark:border-gray-700">
-              <CardHeader>
-                <CardTitle>Recent Weight History</CardTitle>
+              <CardHeader className="flex flex-col md:flex-row md:items-center justify-between pb-2">
+                <CardTitle className="text-xl font-bold flex items-center gap-2">
+                  <Scale className="text-blue-500 w-6 h-6" /> Recent Weight History
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {history.length > 0 ? (
@@ -1165,6 +1250,90 @@ export default function DashboardPage() {
                   <p className="text-gray-500 dark:text-gray-400">
                     No weight history yet. Save your data to start tracking.
                   </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Dashboard Analytics - Mood */}
+            <Card className="md:col-span-2 dark:bg-gray-800 dark:border-gray-700 relative overflow-hidden">
+              <CardHeader className="flex flex-col md:flex-row md:items-center justify-between pb-2">
+                <CardTitle className="text-xl font-bold flex items-center gap-2">
+                  <Smile className="text-yellow-500 w-6 h-6" /> Mood Trends & Analytics
+                </CardTitle>
+                <div className="mt-2 md:mt-0 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700/50 px-3 py-1.5 rounded-md flex items-center gap-2 max-w-sm">
+                  <TrendingUp className="w-5 h-5 text-cyan-500 shrink-0" />
+                  <span className="leading-tight">{getMoodInsight()}</span>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-6">
+                {moodChartData.length > 0 ? (
+                  <div className="w-full overflow-x-auto overflow-y-hidden pb-2 custom-scrollbar" ref={moodScrollRef}>
+                    <div style={{ width: Math.max(moodChartData.length * 70, 600), height: 300, minWidth: "100%" }}>
+                      <ResponsiveContainer>
+                      <AreaChart data={moodChartData} margin={{ top: 20, right: 20, left: 0, bottom: 10 }}>
+                        <defs>
+                          <linearGradient id="moodColorGradient" x1="0" y1="0" x2="1" y2="0">
+                            {moodChartData.map((d, i) => {
+                              const percentage = moodChartData.length > 1 ? (i / (moodChartData.length - 1)) * 100 : 100;
+                              let color = "#eab308"; // neutral
+                              if (d.value === 1) color = "#ef4444"; // sad
+                              if (d.value === 3) color = "#22c55e"; // happy
+                              
+                              if (i < moodChartData.length - 1) {
+                                const nextPercentage = (i + 1) / (moodChartData.length - 1) * 100;
+                                const mid = (percentage + nextPercentage) / 2;
+                                return (
+                                  <React.Fragment key={i}>
+                                    <stop offset={`${percentage}%`} stopColor={color} />
+                                    <stop offset={`${mid}%`} stopColor={color} />
+                                  </React.Fragment>
+                                );
+                              } else {
+                                return <stop key={i} offset={`${percentage}%`} stopColor={color} />;
+                              }
+                            })}
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.2} />
+                        <XAxis 
+                          dataKey="date" 
+                          tickFormatter={(val) => {
+                            const d = new Date(val);
+                            return `${d.getDate()}/${d.getMonth()+1}`;
+                          }}
+                          tickLine={false} 
+                          axisLine={false}
+                          tick={{ fill: '#888', fontSize: 12 }}
+                          dy={10}
+                        />
+                        <YAxis 
+                          domain={[0.5, 3.5]} 
+                          ticks={[1, 2, 3]} 
+                          tick={renderMoodTick} 
+                          axisLine={false} 
+                          tickLine={false} 
+                          width={40}
+                        />
+                        <Tooltip content={<CustomMoodTooltip />} />
+                        <Area 
+                          type="monotone" 
+                          dataKey="value" 
+                          stroke="url(#moodColorGradient)" 
+                          strokeWidth={4}
+                          fillOpacity={0.15} 
+                          fill="url(#moodColorGradient)" 
+                          activeDot={false}
+                          dot={<CustomEmojiDot />}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-[200px] text-gray-500 dark:text-gray-400">
+                    <Smile className="w-12 h-12 text-gray-300 dark:text-gray-600 mb-3" />
+                    <p>No mood data yet. Track your mood in the Mind tab to see analytics!</p>
+                  </div>
                 )}
               </CardContent>
             </Card>
